@@ -6,7 +6,7 @@
 <title>Моя шаверма</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@600&display=swap">
 <style>
-/* Layout: one column. Cafe floor on top, order-builder panel under it, day summary slides over the floor. */
+/* Layout: one column. Stage (hall or 3D kitchen, switched by tabs) on top, order panel under it; day summary slides over the stage. */
 :root{
   --bg:#1F1712;
   --panel:#2B2019;
@@ -21,6 +21,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{
   background:var(--bg);color:var(--cream);font-family:var(--font-body);font-size:15px;line-height:1.45;
   padding-block:20px 32px;
@@ -57,42 +58,39 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .btn.primary{background:var(--chili);border-color:var(--chili);color:#FFF4DE;font-weight:600}
 .btn.primary:hover{background:#E4543A}
 .btn.go{background:var(--turmeric);border-color:var(--turmeric);color:#2B1A0A;font-weight:600;align-self:flex-start}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.tabs{display:flex;gap:8px;margin-bottom:8px}
+.tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 16px;font-weight:600}
+.tab[aria-pressed="true"]{background:var(--turmeric);border-color:var(--turmeric);color:#2B1A0A}
+.tab span{font-weight:500;opacity:.8}
+.kitchen{position:absolute;inset:0;background:#2a1d15;touch-action:none}
+.kitchen canvas{display:block;width:100%;height:100%}
+.khint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(24,16,11,.82);color:var(--cream);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:500;white-space:nowrap;pointer-events:none;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+.tbar{margin-top:8px}
+.build{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.build li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.build li span:last-child{color:var(--muted);text-align:right}
+.build li.on span:last-child{color:var(--cream);font-weight:600}
 .lbl{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .ticket{border:1px dashed var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:12px;min-height:62px}
 .ticket p{margin:0;font-size:16px;font-weight:500}
-.grp{margin-bottom:10px}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chips button{border:1px solid var(--line);background:#1F1712;border-radius:999px;padding:7px 14px;display:inline-flex;align-items:center;gap:8px;font-weight:500}
-.chips button:hover{border-color:var(--muted)}
-.chips button[aria-pressed="true"]{background:var(--turmeric);border-color:var(--turmeric);color:#2B1A0A}
-.chips i{width:12px;height:12px;border-radius:50%;background:var(--sw,#888);border:1px solid rgba(0,0,0,.35)}
-.serve{display:flex;flex-direction:column;align-items:center;gap:10px}
-#pv{width:150px;height:120px}
 .btns{display:flex;gap:8px;width:100%}
 .btns .btn{flex:1}
-#msg{margin:0;min-height:40px;font-size:13px;color:var(--muted);text-align:center;width:100%}
-@media (max-width:600px){.panel{grid-template-columns:minmax(0,1fr)}}
+#msg{margin:0;min-height:20px;font-size:13px;color:var(--muted);text-align:center;width:100%}
 /* Wide screens: header and HUD share a row, order panel sits beside the floor so nothing needs scrolling. */
 .main{display:flex;flex-direction:column;gap:14px}
 @media (min-width:1000px){
-  .wrap{max-width:clamp(940px,calc((100vh - 130px)*1.6 + 354px),1280px)}
+  .wrap{max-width:clamp(940px,calc((100vh - 176px)*1.6 + 354px),1280px)}
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
   .hud{flex:0 1 640px}
   .main{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
-  .panel{grid-template-columns:minmax(0,1fr);gap:10px}
-  .chips{gap:6px}
-  .chips button{padding:6px 11px;font-size:14px;gap:6px}
-  .ticket{margin-bottom:10px}
-  .serve{display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:10px 12px}
-  .serve .btns{flex-direction:column}
-  #pv{width:120px;height:96px}
-  #msg{grid-column:1/-1;min-height:20px}
+  .main .panel{margin-top:44px}
 }
 /* Phones: the floor is too small to hold intro/summary text, so the overlay replaces it while open. */
 @media (max-width:600px){
-  .stage:has(.overlay:not([hidden])) #cv{display:none}
+  .stage:has(.overlay:not([hidden])) #cv,.stage:has(.overlay:not([hidden])) .kitchen{display:none}
   .overlay{position:static}
+  .khint{font-size:12px;bottom:8px;padding:4px 10px}
 }
 .ovbtns{display:flex;flex-wrap:wrap;gap:10px}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
@@ -104,7 +102,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   <div class="top">
   <header>
     <h1>Моя шаверма</h1>
-    <p class="sub">Прототип: кафе внутри, гости, заказы и сборка шавермы</p>
+    <p class="sub">Прототип: зал с гостями и 3D-кухня</p>
   </header>
 
   <div class="hud">
@@ -116,39 +114,26 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   </div>
 
   <div class="main">
+  <div>
+  <div class="tabs">
+    <button class="tab" id="tabHall" aria-pressed="true">Зал <span id="waitN"></span></button>
+    <button class="tab" id="tabKitchen" aria-pressed="false">Кухня</button>
+  </div>
   <div class="stage">
     <canvas id="cv" width="640" height="400" aria-label="Зал шаурмичной"></canvas>
+    <div class="kitchen" id="kitchen" hidden aria-label="Кухня: вертела, лаваш, овощи и соусы"></div>
     <div class="overlay" id="ov"></div>
+  </div>
   </div>
 
   <section class="panel">
-    <div>
-      <div class="ticket"><span class="lbl">Заказ гостя</span><p id="tkText">Нажмите на гостя с пузырём заказа.</p></div>
-      <div class="grp"><span class="lbl">Мясо</span>
-        <div class="chips" data-g="meat">
-          <button data-v="chicken" aria-pressed="false" style="--sw:#E6B04F"><i></i>Курица</button>
-          <button data-v="beef" aria-pressed="false" style="--sw:#8A3B22"><i></i>Говядина</button>
-        </div></div>
-      <div class="grp"><span class="lbl">Лук</span>
-        <div class="chips" data-g="onion">
-          <button data-v="yes" aria-pressed="false" style="--sw:#9B6BB8"><i></i>С луком</button>
-          <button data-v="no" aria-pressed="false" style="--sw:transparent"><i></i>Без лука</button>
-        </div></div>
-      <div class="grp"><span class="lbl">Соус</span>
-        <div class="chips" data-g="sauce">
-          <button data-v="garlic" aria-pressed="false" style="--sw:#FFF1CF"><i></i>Чесночный</button>
-          <button data-v="spicy" aria-pressed="false" style="--sw:#D8432B"><i></i>Острый</button>
-          <button data-v="cheese" aria-pressed="false" style="--sw:#F2C23B"><i></i>Сырный</button>
-        </div></div>
+    <div class="ticket"><span class="lbl">Заказ гостя</span><p id="tkText">Нажмите на гостя с пузырём заказа.</p><div class="bar tbar"><i id="tkBar"></i></div></div>
+    <div><span class="lbl">На лаваше</span><ul class="build" id="bl"></ul></div>
+    <div class="btns">
+      <button class="btn" id="reset">Сбросить</button>
+      <button class="btn primary" id="serve">Подать</button>
     </div>
-    <div class="serve">
-      <canvas id="pv" width="150" height="120" aria-label="Собираемая шаверма"></canvas>
-      <div class="btns">
-        <button class="btn" id="reset">Сбросить</button>
-        <button class="btn primary" id="serve">Подать</button>
-      </div>
-      <p id="msg" aria-live="polite"></p>
-    </div>
+    <p id="msg" aria-live="polite"></p>
   </section>
   </div>
 </div>
@@ -157,10 +142,8 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 (function(){
 var W=640,H=400;
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-var pv=document.getElementById('pv'),pctx=pv.getContext('2d');
 var dpr=Math.min(window.devicePixelRatio||1,2);
 cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
-pv.width=150*dpr;pv.height=120*dpr;pctx.setTransform(dpr,0,0,dpr,0,0);
 
 var MEAT={chicken:{name:'Курица',c:'#E6B04F'},beef:{name:'Говядина',c:'#8A3B22'}};
 var SAUCE={garlic:{name:'Чесночный',c:'#FFF1CF'},spicy:{name:'Острый',c:'#D8432B'},cheese:{name:'Сырный',c:'#F2C23B'}};
@@ -171,7 +154,9 @@ var SKIN=['#F2C9A0','#E0AC83','#C58C63','#8D5A3B'];
 var SHIRT=['#3B82C4','#7A5CC4','#2A9D8F','#E9A23B','#C7546B','#4F7A3A','#5B6C8F'];
 var HAIR=['#2B1D14','#5A3A22','#B5651D','#1A1A1A','#8A8A8A'];
 
-var G,BUILD={meat:null,onion:null,sauce:null};
+var G,KST={meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null};
+var view='hall';
+function K(){return window.Kitchen;}
 var anim=0;
 
 function newGame(){
@@ -226,7 +211,7 @@ function showIntro(){
   }
   showOv('<h2>Открываем шаверму</h2>'+
     '<p>Гости заходят, садятся за столики и ждут заказ. Чем быстрее и точнее вы соберёте шаверму, тем больше чаевых и выше репутация.</p>'+
-    '<ol><li>Нажмите на гостя с пузырём заказа.</li><li>Выберите мясо, лук и соус как в заказе.</li><li>Нажмите «Подать».</li></ol>'+
+    '<ol><li>Нажмите на гостя с пузырём заказа — откроется кухня.</li><li>Проведите по нужному вертелу, чтобы срезать мясо, добавьте помидоры и огурцы, лук — если просили, и полейте соусом.</li><li>Нажмите «Подать».</li></ol>'+
     '<button class="btn go" id="start">Открыть день 1</button>');
   document.getElementById('start').onclick=startDay;
 }
@@ -239,7 +224,7 @@ var UPG=[
     max:function(){return G.sign>=3;},lvl:function(){return G.sign+' из 3';},cost:function(){return 800+G.sign*600;},buy:function(){G.sign++;}}
 ];
 function showSummary(){
-  G.phase='summary';
+  G.phase='summary';setView('hall');
   save();
   var s=G.stats;
   var h='<h2>День '+G.day+' закончен</h2>'+
@@ -266,7 +251,7 @@ function showSummary(){
 function startDay(){
   G.phase='play';G.time=0;G.spawnT=1;G.cust=[];G.occ=[];G.sel=null;G.floats=[];G.lastLeft=-1;
   G.stats={served:0,lost:0,earned:0};
-  resetBuild();updateTicket();msg('');hud();hideOv();
+  resetBuild();setView('hall');updateTicket();msg('');hud();hideOv();
 }
 function maxPatience(){return Math.max(24,40-Math.min(G.day,8)*1.5)*(1+0.25*G.comfort);}
 function nextInterval(){
@@ -353,18 +338,40 @@ function update(dt){
     document.getElementById('hLeft').textContent=left>0?left+' с':'закрываемся';
   }
   document.getElementById('hTime').style.width=clamp(G.time/len*100,0,100)+'%';
+  document.getElementById('tkBar').style.width=(G.sel&&G.sel.state==='wait'?G.sel.patience/G.sel.maxP*100:0)+'%';
+  var waiting=G.cust.filter(function(c){return c.state==='wait';}).length;
+  var wt=waiting?'· ждут '+waiting:'';
+  if(wt!==G.lastWait){G.lastWait=wt;document.getElementById('waitN').textContent=wt;}
   if(G.time>=len&&G.cust.length===0)showSummary();
 }
 
-/* ---------- builder ---------- */
-function resetBuild(){BUILD={meat:null,onion:null,sauce:null};syncChips();drawBuild();}
-function syncChips(){
-  document.querySelectorAll('.chips').forEach(function(g){
-    g.querySelectorAll('button').forEach(function(b){
-      b.setAttribute('aria-pressed',BUILD[g.dataset.g]===b.dataset.v?'true':'false');
-    });
-  });
+/* ---------- builder (the 3D kitchen owns the lavash; this mirrors its state) ---------- */
+var VEG_NAMES={tomato:'Помидоры',cucumber:'Огурцы',onion:'Лук'};
+function resetBuild(){if(K())K().reset();else window.onKitchenChange({meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null});}
+window.onKitchenChange=function(st){KST=st;renderBuild();};
+function renderBuild(){
+  var need=K()?K().MEAT_NEED:3;
+  var meat=KST.meat==='mixed'?'Смешали':KST.meat?MEAT[KST.meat].name:'—';
+  var rows=[
+    ['Мясо',KST.meatN?meat+' · '+Math.min(KST.meatN,need)+'/'+need:'—',KST.meatN>0],
+    [VEG_NAMES.tomato,KST.tomato?'есть':'—',KST.tomato],
+    [VEG_NAMES.cucumber,KST.cucumber?'есть':'—',KST.cucumber],
+    [VEG_NAMES.onion,KST.onion?'есть':'—',KST.onion],
+    ['Соус',KST.sauce==='mixed'?'Смешали':KST.sauce?SAUCE[KST.sauce].name:'—',!!KST.sauce]
+  ];
+  document.getElementById('bl').innerHTML=rows.map(function(r){
+    return '<li'+(r[2]?' class="on"':'')+'><span>'+r[0]+'</span><span>'+r[1]+'</span></li>';
+  }).join('');
 }
+function setView(v){
+  view=v;
+  document.getElementById('tabHall').setAttribute('aria-pressed',v==='hall'?'true':'false');
+  document.getElementById('tabKitchen').setAttribute('aria-pressed',v==='kitchen'?'true':'false');
+  if(K()){if(v==='kitchen')K().show();else K().hide();}
+}
+document.getElementById('tabHall').onclick=function(){setView('hall');};
+document.getElementById('tabKitchen').onclick=function(){setView('kitchen');};
+document.addEventListener('kitchenready',function(){setView(view);renderBuild();});
 function orderText(o){
   return MEAT[o.meat].name+', '+SAUCE[o.sauce].name.toLowerCase()+' соус, '+(o.onion?'с луком':'без лука');
 }
@@ -373,24 +380,19 @@ function updateTicket(){
   if(G.sel&&G.sel.state==='wait'){el.textContent='Стол '+(G.sel.table+1)+': '+orderText(G.sel.order);}
   else{el.textContent='Нажмите на гостя с пузырём заказа.';}
 }
-document.querySelectorAll('.chips').forEach(function(g){
-  g.addEventListener('click',function(e){
-    var b=e.target.closest('button');if(!b)return;
-    var k=g.dataset.g;
-    BUILD[k]=BUILD[k]===b.dataset.v?null:b.dataset.v;
-    syncChips();drawBuild();
-  });
-});
 document.getElementById('reset').onclick=function(){resetBuild();msg('');};
 document.getElementById('serve').onclick=function(){
   if(G.phase!=='play')return;
   var c=G.sel;
   if(!c||c.state!=='wait'){msg('Сначала выберите гостя с заказом.');return;}
-  if(!BUILD.meat||!BUILD.onion||!BUILD.sauce){msg('Выберите мясо, лук и соус.');return;}
+  if(!KST.meatN){msg('Срежьте мясо с вертела.');setView('kitchen');return;}
+  if(!KST.sauce){msg('Полейте соусом.');setView('kitchen');return;}
   var bad=[];
-  if(BUILD.meat!==c.order.meat)bad.push('мясо');
-  if(BUILD.sauce!==c.order.sauce)bad.push('соус');
-  if(BUILD.onion!==(c.order.onion?'yes':'no'))bad.push('лук');
+  if(KST.meat!==c.order.meat)bad.push('мясо');
+  else if(KST.meatN<(K()?K().MEAT_NEED:3))bad.push('мало мяса');
+  if(!KST.tomato||!KST.cucumber)bad.push('овощи');
+  if(KST.onion!==c.order.onion)bad.push('лук');
+  if(KST.sauce!==c.order.sauce)bad.push('соус');
   var tip=Math.round(100*(c.patience/c.maxP));
   c.pay=Math.max(100,250+tip-80*bad.length);
   c.state='eat';c.eatT=3.5;
@@ -402,7 +404,9 @@ document.getElementById('serve').onclick=function(){
     G.rep=clamp(G.rep+0.1,1,5);
     msg('Идеально! Чаевые: '+tip+' ₽.');
   }
-  G.sel=null;pickNext();updateTicket();resetBuild();hud();
+  G.sel=null;pickNext();updateTicket();hud();
+  if(K())K().wrap(function(){if(G.phase==='play')setView('hall');});
+  else resetBuild();
 };
 cv.addEventListener('pointerdown',function(e){
   if(G.phase!=='play')return;
@@ -414,7 +418,7 @@ cv.addEventListener('pointerdown',function(e){
     var d=Math.min(Math.hypot(x-c.x,y-(c.y-18)),Math.hypot(x-c.x,y-(c.y-52)));
     if(d<36&&d<bd){best=c;bd=d;}
   });
-  if(best){G.sel=best;updateTicket();}
+  if(best){G.sel=best;updateTicket();setView('kitchen');}
 });
 
 /* ---------- drawing ---------- */
@@ -422,24 +426,6 @@ function rr(c,x,y,w,h,r){
   c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
   c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);
   c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();
-}
-function drawBuild(){
-  var c=pctx;c.clearRect(0,0,150,120);
-  var cx=75,cy=62;
-  if(!BUILD.meat&&!BUILD.onion&&!BUILD.sauce){
-    c.setLineDash([5,4]);c.strokeStyle='#B39B80';c.lineWidth=1.5;
-    c.beginPath();c.ellipse(cx,cy,56,40,0,0,Math.PI*2);c.stroke();c.setLineDash([]);
-    c.fillStyle='#B39B80';c.font='500 12px Onest,sans-serif';c.textAlign='center';c.fillText('Лаваш пуст',cx,cy+4);
-    return;
-  }
-  c.fillStyle='#F4DFB4';c.strokeStyle='#D2B27A';c.lineWidth=2;
-  c.beginPath();c.ellipse(cx,cy,60,42,0,0,Math.PI*2);c.fill();c.stroke();
-  if(BUILD.meat){c.fillStyle=MEAT[BUILD.meat].c;rr(c,cx-42,cy-9,84,18,9);c.fill();
-    c.strokeStyle='rgba(0,0,0,.2)';c.lineWidth=1;c.beginPath();c.moveTo(cx-30,cy-4);c.lineTo(cx+30,cy-4);c.moveTo(cx-34,cy+4);c.lineTo(cx+34,cy+4);c.stroke();}
-  if(BUILD.onion==='yes'){c.strokeStyle='#9B6BB8';c.lineWidth=2.5;
-    for(var i=0;i<4;i++){c.beginPath();c.arc(cx-30+i*20,cy-18+(i%2)*3,6,0,Math.PI*2);c.stroke();}}
-  if(BUILD.sauce){c.strokeStyle=SAUCE[BUILD.sauce].c;c.lineWidth=4;c.lineCap='round';c.beginPath();
-    c.moveTo(cx-40,cy+20);for(var j=0;j<8;j++){c.lineTo(cx-40+j*11.5+5.7,cy+(j%2?20:28));}c.stroke();c.lineCap='butt';}
 }
 function bg(){
   for(var y=90;y<H;y+=40)for(var x=0;x<W;x+=40){
@@ -568,9 +554,11 @@ function frame(now){
 }
 newGame();
 var saved=loadSave();if(saved)applySave(saved);
-hud();drawBuild();showIntro();
+hud();renderBuild();showIntro();
 requestAnimationFrame(frame);
 })();
 </script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+<script type="module" src="js/kitchen.js"></script>
 </body>
 </html>
