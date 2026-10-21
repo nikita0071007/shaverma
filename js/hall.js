@@ -79,13 +79,19 @@ for(const t of tables){
 }
 
 /* "bright sign" upgrade: neon signs light up one by one */
+const haloTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,0.9)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
 function neon(text,color,w,h){
   const c=document.createElement('canvas');c.width=1024;c.height=Math.round(1024*h/w);const g=c.getContext('2d');
   g.font='800 '+Math.round(c.height*0.55)+'px Unbounded,Onest,Arial,sans-serif';g.textAlign='center';g.textBaseline='middle';
   g.shadowColor=color;g.shadowBlur=40;g.fillStyle=color;g.fillText(text,c.width/2,c.height/2);
   g.shadowBlur=12;g.fillStyle='#ffffff';g.fillText(text,c.width/2,c.height/2);
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,toneMapped:false,depthWrite:false}));
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,toneMapped:false,depthWrite:false}));
+  /* soft coloured halo on the wall behind the tubes */
+  const halo=new THREE.Mesh(new THREE.PlaneGeometry(w*1.5,h*2.4),new THREE.MeshBasicMaterial({map:haloTex,color,transparent:true,opacity:0.45,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}));
+  halo.position.z=-0.02;m.add(halo);
+  return m;
 }
 const signs=[neon('МОЯ ШАВЕРМА','#ff7a1a',6.5,1.4),neon('ВКУСНО 24/7','#3ad6ff',5.5,1.3),neon('♥ ШАВА','#ff3d8b',4.2,1.3)];
 signs[0].position.set(10.8,6.2,BACK+0.05);
@@ -197,8 +203,59 @@ cookG=makeCook();
 
 const OUTFITS={white:['#f4f4f2','#3a2a20'],black:['#232323','#8a1c1c'],red:['#c8321e','#1d1d1d'],khaki:['#5b6b3a','#2f3320'],denim:['#3d5a80','#a0522d'],gold:['#d4a537','#5a3a10']};
 const LOOKS={misha:{skin:'#E0AC83',hair:'#2B1D14'},beard:{skin:'#E0AC83',hair:'#5A3A22',beard:1},mustache:{skin:'#D9A47C',hair:'#2B1D14',mustache:1},bald:{skin:'#C58C63',hair:'#2B1D14',bald:1},girl:{skin:'#F2C9A0',hair:'#B5651D',long:1}};
+/* the animated cook (Quaternius body) wears the shop items as bone-following pieces */
+let cookA=null,cookAGirl=null;
+const cookAcc=(()=>{
+  const white=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:0.6});
+  const chef=new THREE.Group();
+  const band=mesh(new THREE.CylinderGeometry(0.42,0.42,0.3,20),white);chef.add(band);
+  const puff=mesh(new THREE.SphereGeometry(0.55,18,12),white);puff.scale.y=0.7;puff.position.y=0.4;chef.add(puff);
+  const bandana=mesh(new THREE.SphereGeometry(0.45,18,10,0,Math.PI*2,0,Math.PI*0.5),new THREE.MeshStandardMaterial({color:'#c8321e',roughness:0.8}));
+  const capMat=new THREE.MeshStandardMaterial({color:'#1f3a6b',roughness:0.7}),cap=new THREE.Group();
+  cap.add(mesh(new THREE.SphereGeometry(0.45,18,10,0,Math.PI*2,0,Math.PI*0.5),capMat));
+  const visor=mesh(new THREE.BoxGeometry(0.55,0.05,0.4),capMat);visor.position.set(0,0.02,0.45);cap.add(visor);
+  const hairMat=new THREE.MeshStandardMaterial({color:'#5A3A22',roughness:0.9});
+  const beard=mesh(new THREE.SphereGeometry(0.3,14,10),hairMat);beard.scale.set(1,0.85,0.6);
+  const mustache=mesh(new THREE.BoxGeometry(0.3,0.06,0.07),hairMat);
+  const apronMat=new THREE.MeshStandardMaterial({color:'#3a2a20',roughness:0.8});
+  const apron=mesh(new THREE.BoxGeometry(0.9,1.6,0.05),apronMat);
+  return {chef,bandana,cap,beard,mustache,apron,apronMat,hairMat};
+})();
+function buildCookA(girl){
+  const t=charTemplates.find(x=>x.name===(girl?'Female_Casual':'Male_Shirt'));if(!t)return null;
+  const g=makeAnimated(t,{});g.position.copy(cookG.position);g.rotation.y=Math.PI;scene.add(g);
+  follow(g,cookAcc.chef,'Head_end',new THREE.Vector3(0,0.05,0));
+  follow(g,cookAcc.bandana,'Head_end',new THREE.Vector3(0,-0.32,0));
+  follow(g,cookAcc.cap,'Head_end',new THREE.Vector3(0,-0.3,0));
+  follow(g,cookAcc.beard,'Head',new THREE.Vector3(0,0.12,0.3));
+  follow(g,cookAcc.mustache,'Head',new THREE.Vector3(0,0.3,0.42));
+  follow(g,cookAcc.apron,'Hips',new THREE.Vector3(0,0.25,0.42));
+  for(const k of ['chef','bandana','cap','beard','mustache','apron'])scene.add(cookAcc[k]);
+  return g;
+}
 function applyCook(eq){
-  const u=cookG.userData,L=u.look,o=OUTFITS[eq.outfit]||OUTFITS.white,lk=LOOKS[eq.look]||LOOKS.misha;
+  const lk=LOOKS[eq.look]||LOOKS.misha,o=OUTFITS[eq.outfit]||OUTFITS.white;
+  if(charTemplates.length){
+    const girl=!!lk.long;
+    if(!cookA||cookAGirl!==girl){if(cookA){dropFollowers(cookA);scene.remove(cookA);}cookA=buildCookA(girl);cookAGirl=girl;}
+    if(cookA){
+      cookG.visible=false;
+      cookA.userData.body.traverse(m=>{
+        if(!m.isMesh)return;
+        for(const mt of Array.isArray(m.material)?m.material:[m.material]){
+          const n=(mt.name||'').toLowerCase();
+          if(n==='shirt'){mt.color.set(o[0]);mt.metalness=eq.outfit==='gold'?0.55:0;mt.roughness=eq.outfit==='gold'?0.35:0.8;}
+          else if(n==='pants')mt.color.set('#2b2b2b');
+          else if(n==='skin')mt.color.set(lk.skin);
+          else if(n.startsWith('hair'))mt.color.set(lk.bald?lk.skin:lk.hair);
+        }
+      });
+      cookAcc.apronMat.color.set(o[1]);cookAcc.hairMat.color.set(lk.hair);
+      cookA.userData.show={chef:eq.hat==='chef',bandana:eq.hat==='bandana',cap:eq.hat==='cap',beard:!!lk.beard,mustache:!!lk.mustache,apron:true};
+      return;
+    }
+  }
+  const u=cookG.userData,L=u.look;
   u.mats.shirt.color.set(o[0]);u.mats.shirt.metalness=eq.outfit==='gold'?0.55:0;u.mats.shirt.roughness=eq.outfit==='gold'?0.35:0.75;
   L.apronMat.color.set(o[1]);
   u.mats.skin.color.set(lk.skin);u.mats.hair.color.set(lk.hair);
@@ -273,6 +330,21 @@ function makeAnimated(t,colors){
   play(g,'Idle');
   return g;
 }
+/* hats, beards, aprons and caps ride along with a bone: position from the bone, turn from the person */
+const _bp=new THREE.Vector3(),_off=new THREE.Vector3();
+function follow(g,obj,boneName,off){
+  const b=g.userData.body&&g.userData.body.getObjectByName(boneName);if(!b)return;
+  (g.userData.followers||(g.userData.followers=[])).push({obj,b,off:off.clone()});
+  (g.parent||crowd).add(obj);
+}
+function updateFollowers(g){
+  const f=g.userData.followers;if(!f)return;
+  for(const x of f){
+    x.b.getWorldPosition(_bp);_off.copy(x.off).applyAxisAngle(THREE.Object3D.DEFAULT_UP,g.rotation.y);
+    x.obj.position.copy(_bp).add(_off);x.obj.rotation.set(0,g.rotation.y,0);x.obj.visible=g.visible;
+  }
+}
+function dropFollowers(g){const f=g.userData.followers;if(f)for(const x of f)if(x.obj.parent)x.obj.parent.remove(x.obj);}
 function play(g,name){
   const u=g.userData,a=u.act[name];if(!a||u.cur===name)return;
   a.reset().fadeIn(0.25).play();if(u.cur&&u.act[u.cur])u.act[u.cur].fadeOut(0.25);u.cur=name;
@@ -305,6 +377,16 @@ function makeBag(){
   g.userData.lid=lid;return g;
 }
 function makeCourier(c){
+  const t=charTemplates.find(x=>x.name==='Male_LongSleeve');
+  if(t){
+    const g=makeAnimated(t,{shirt:COURIER_C,pants:'#2b2b2b',skin:c.skin,hair:c.hair});
+    const capMat=new THREE.MeshStandardMaterial({color:COURIER_C,roughness:0.7}),cap=new THREE.Group();
+    cap.add(mesh(new THREE.SphereGeometry(0.45,18,10,0,Math.PI*2,0,Math.PI*0.5),capMat));
+    const visor=mesh(new THREE.BoxGeometry(0.55,0.05,0.4),capMat);visor.position.set(0,0.02,0.45);cap.add(visor);
+    g.userData.cap=cap;g.userData.capOff=new THREE.Vector3(0,-0.3,0);
+    const bag=makeBag();bag.position.set(1.3,0,0.4);g.add(bag);g.userData.bag=bag;
+    return g;
+  }
   const g=new THREE.Group();
   if(courierModel){const m=courierModel.clone(true);g.add(m);g.userData.body=m;}
   else{const s=makeGuest(Object.assign({},c,{shirt:COURIER_C}));g.add(s);Object.assign(g.userData,s.userData);}
@@ -318,8 +400,14 @@ function makeCourier(c){
 const layer=document.createElement('div');layer.className='bubbles';root.appendChild(layer);
 const DRINK_C={tea:'#9A4A1C',ayran:'#F3EFE4',cola:'#2A0F06'},MEAT_C={chicken:'#E6B04F',beef:'#8A3B22'},SAUCE_C={garlic:'#FFF1CF',spicy:'#D8432B',cheese:'#F2C23B'};
 const ING_C={tomato:'#d4321f',cucumber:'#3f7a2a',onion:'#c9a2d8',cabbage:'#e3ecbd',carrot:'#f0761c',fries:'#f2c14e',cheese:'#f5d76e',jalapeno:'#2f8a22',pickle:'#55702f',greens:'#3f9a3a'};
+const ING_SHORT={tomato:'помидор',cucumber:'огурец',onion:'лук',cabbage:'капуста',carrot:'морковь',fries:'фри',cheese:'сыр',jalapeno:'халапеньо',pickle:'сол. огурец',greens:'зелень'};
+const DRINK_N={tea:'чай',ayran:'айран',cola:'кола'},SAUCE_N={garlic:'чесночный',spicy:'острый',cheese:'сырный'},MEAT_N={chicken:'курица',beef:'говядина'};
+/* what the guest wants, in words: recipe, filling, sauce and drink */
+function orderWords(o){
+  return (o.meat?MEAT_N[o.meat]+(o.meatN>3?' ×2':'')+' · ':'без мяса · ')+o.ing.map(k=>ING_SHORT[k]).join(' · ')+' · соус '+SAUCE_N[o.sauce];
+}
 function icons(o){
-  return '<span class="nm">'+o.name+'</span><span class="ic">'+
+  return '<span class="nm">'+o.name+(o.drink?' <em>+ '+DRINK_N[o.drink]+'</em>':'')+'</span><span class="wd">'+orderWords(o)+'</span><span class="ic">'+
     (o.meat?'<i class="dot" style="background:'+MEAT_C[o.meat]+'"></i>':'')+
     o.ing.map(k=>'<i class="mini" style="background:'+ING_C[k]+'"></i>').join('')+
     '<i class="sq" style="background:'+SAUCE_C[o.sauce]+'"></i>'+
@@ -377,15 +465,23 @@ hooks.push((dt,t)=>{
   }
   /* in the kitchen view the player is the cook: hide the cook and the dining room so nothing blocks the counter */
   const working=K&&K.view==='kitchen'&&K.progress>0.6;
-  crowd.visible=!working;cookG.visible=!working;
+  crowd.visible=!working;
+  if(!cookA&&charTemplates.length)lookKey='';   /* animated bodies just loaded: rebuild the cook on them */
   {
-    const u=cookG.userData,dx=cook.x-cookG.position.x,step=Math.sign(dx)*Math.min(Math.abs(dx),dt*5);
-    cookG.position.x+=step;const walking=Math.abs(dx)>0.05;
-    u.phase=(u.phase||0)+dt*(walking?9:2.5);
-    const sw=walking?Math.sin(u.phase)*0.5:0;
-    u.legL.rotation.x=sw;u.legR.rotation.x=-sw;
-    u.armL.rotation.x=walking?-sw*0.8:-0.9+Math.sin(u.phase)*0.15;u.armR.rotation.x=walking?sw*0.8:-0.9-Math.sin(u.phase)*0.15;
-    cookG.rotation.y=walking?(dx>0?Math.PI/2:-Math.PI/2):Math.PI;
+    const node=cookA||cookG,u=node.userData;
+    node.visible=!working;if(cookA)cookG.visible=false;
+    const dx=cook.x-node.position.x,step=Math.sign(dx)*Math.min(Math.abs(dx),dt*5);
+    node.position.x+=step;const walking=Math.abs(dx)>0.05;
+    node.rotation.y=walking?(dx>0?Math.PI/2:-Math.PI/2):Math.PI;
+    if(u.anim){
+      play(node,walking?'Walk':'Idle');u.mixer.update(dt);updateFollowers(node);
+      const sh=u.show||{};for(const k in sh)cookAcc[k].visible=sh[k]&&node.visible;
+    }else{
+      u.phase=(u.phase||0)+dt*(walking?9:2.5);
+      const sw=walking?Math.sin(u.phase)*0.5:0;
+      u.legL.rotation.x=sw;u.legR.rotation.x=-sw;
+      u.armL.rotation.x=walking?-sw*0.8:-0.9+Math.sin(u.phase)*0.15;u.armR.rotation.x=walking?sw*0.8:-0.9-Math.sin(u.phase)*0.15;
+    }
   }
   tables.forEach((tb,i)=>{tb.visible=i<G.tables;});
   fridgeBottles.forEach((b,i)=>{b.visible=i<(G.fridge||0);});
@@ -410,7 +506,8 @@ hooks.push((dt,t)=>{
     if(Math.abs(px-X(662))<2.5&&Math.abs(pz-DOOR_Z)<2.5)nearDoor=true;
     /* walk cycle / seated pose */
     u.phase=(u.phase||0)+dt*(moving?9:0);
-    if(u.anim){play(g,seated?'Sitting':moving?'Walk':'Idle');u.mixer.update(dt);}
+    if(u.cap&&!u.followers)follow(g,u.cap,'Head_end',u.capOff);
+    if(u.anim){play(g,seated?'Sitting':moving?'Walk':'Idle');u.mixer.update(dt);updateFollowers(g);}
     else if(u.legL){
       const sw=moving?Math.sin(u.phase)*0.6:0;
       u.legL.rotation.x=seated?-1.45:sw;u.legR.rotation.x=seated?-1.45:-sw;
@@ -457,7 +554,7 @@ hooks.push((dt,t)=>{
     el.classList.toggle('sel',G.sel===c);el.classList.toggle('courier',!!c.courier);
     const r=c.patience/c.maxP,bar=el.lastChild.firstChild;bar.style.width=(r*100)+'%';bar.style.background=r>.5?'#8FB339':r>.25?'#F2A93B':'#D8432B';
   });
-  for(const [c,a] of actors)if(!seen.has(c)){crowd.remove(a.g);if(a.bub)a.bub.remove();actors.delete(c);if(plates.has(c)){crowd.remove(plates.get(c));plates.delete(c);}}
+  for(const [c,a] of actors)if(!seen.has(c)){dropFollowers(a.g);crowd.remove(a.g);if(a.bub)a.bub.remove();actors.delete(c);if(plates.has(c)){crowd.remove(plates.get(c));plates.delete(c);}}
   /* door */
   doorOpen=THREE.MathUtils.clamp(doorOpen+(nearDoor?dt:-dt)*3,0,1);
   doorPivot.rotation.y=doorOpen*1.3;

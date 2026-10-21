@@ -172,7 +172,11 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .tk .dot{border-radius:50%}.tk .sq{border-radius:3px}
 .tk .ring{border-radius:50%;border:2px solid #9B6BB8!important;background:transparent;position:relative}
 .tk .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
-.tk .nm,.bub .nm{font-weight:700;font-size:11px;white-space:nowrap}
+.tk .nm,.bub .nm{font-weight:800;font-size:13px;white-space:nowrap}
+.bub .nm em,.tk .nm em{font-style:normal;color:#9A4A1C}
+.bub .wd,.tk .wd{display:block;font-size:10.5px;line-height:1.25;max-width:150px;color:#5a4636;text-align:left}
+.tk .wd{max-width:130px}
+@media (max-width:700px){.bub .wd{display:none}.bub .nm{font-size:12px}}
 .tk .ic i.mini,.bub .ic i.mini{width:8px!important;height:8px!important;border-radius:2px}
 .bub .ic{flex-wrap:nowrap}
 .tk .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:14px!important}
@@ -182,6 +186,12 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .gems .v{font-size:16px}
 .devtag{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:#3ad6ff;color:#062a33;font:700 11px var(--font-body);vertical-align:middle}
 .shop{z-index:6}
+.book{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.book div{border:1px solid var(--line);border-radius:10px;padding:10px;background:rgba(43,32,25,.75)}
+.book b{display:flex;justify-content:space-between;font-size:15px}
+.book b span{color:var(--turmeric)}
+.book p{margin:6px 0 0;font-size:13px;color:var(--cream);line-height:1.4}
+.book .locked{opacity:.45}
 .shop .tabsrow{display:flex;gap:6px;flex-wrap:wrap}
 .shop .tabsrow button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-weight:600;font-size:13px}
 .shop .tabsrow button[aria-pressed="true"]{background:var(--turmeric);color:#2B1A0A;border-color:var(--turmeric)}
@@ -235,6 +245,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   <section class="panel">
     <div class="ticket"><span class="lbl">Заказ гостя</span><p id="tkText">Нажмите на гостя с пузырём заказа.</p><div class="bar tbar"><i id="tkBar"></i></div></div>
     <div><span class="lbl" id="blLbl">На лаваше</span><ul class="build" id="bl"></ul></div>
+    <button type="button" class="btn" id="bookBtn">📋 Меню рецептов</button>
     <div class="btns">
       <button class="btn" id="reset">Сбросить</button>
       <button class="btn primary" id="serve">Завернуть</button>
@@ -370,6 +381,17 @@ function renderShop(){
   document.getElementById('shopClose').onclick=closeShop;
 }
 document.getElementById('shopBtn').onclick=openShop;
+/* recipe book: every shawarma with its filling, so it is clear what guests order */
+document.getElementById('bookBtn').onclick=function(){
+  G.paused=true;sfx('click');
+  shopEl.innerHTML='<div class="head"><h2>Меню рецептов</h2></div><div class="book">'+RECIPES.map(function(r){
+    var open=G.dev||G.day>=r.day;
+    return '<div class="'+(open?'':'locked')+'"><b>'+r.name+'<span>'+r.price+' ₽</span></b><p>'+
+      (r.meat?(r.meat==='chicken'?'Курица':'Говядина')+' × '+r.meatN:'Без мяса')+'<br>'+r.ing.map(function(k){return ING[k];}).join(', ')+
+      '<br>Соус: '+SAUCE[r.sauce].name.toLowerCase()+(open?'':'<br>🔒 откроется на '+r.day+'-й день')+'</p></div>';
+  }).join('')+'</div><button class="btn go" id="shopClose">Закрыть</button>';
+  shopEl.hidden=false;document.getElementById('shopClose').onclick=closeShop;
+};
 
 /* developer mode: endless money and crystals so every feature can be tried right away */
 var DEV_MONEY=2000000;

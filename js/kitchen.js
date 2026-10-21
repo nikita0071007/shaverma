@@ -195,6 +195,9 @@ function makeSpit(kind,x){
   const hm=new THREE.MeshStandardMaterial({color:'#000',emissive:'#ff7a26',emissiveMap:tex.heater,emissiveIntensity:1.3});
   const face=new THREE.Mesh(new THREE.PlaneGeometry(1.36,3.3),hm);face.position.set(0,2.1,-0.89);g.add(face);
   const light=new THREE.PointLight('#ff8a3a',7,4.5,1.6);light.position.set(0,2.1,-0.5);g.add(light);
+  /* warm halo of the burners, drawn additively so it reads as heat */
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex.smoke,color:'#ff7a26',transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false}));
+  glow.position.set(0,2.1,-0.6);glow.scale.set(3.2,4.6,1);g.add(glow);
   const lbl=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.27),new THREE.MeshBasicMaterial({map:labelTex(MEATS[kind].name,'#2b1d14','#f2a93b')}));
   lbl.position.set(0,0.12,0.82);lbl.rotation.x=-0.5;g.add(lbl);
   const smoke=[];
@@ -203,7 +206,7 @@ function makeSpit(kind,x){
     s.userData.t=i/6;g.add(s);smoke.push(s);
   }
   scene.add(g);
-  const sp={kind,g,meat,hm,light,smoke,shrink:1};spits.push(sp);return sp;
+  const sp={kind,g,meat,hm,light,smoke,glow,shrink:1};spits.push(sp);return sp;
 }
 makeSpit('chicken',-4.5);
 makeSpit('beef',-2.3);
@@ -289,6 +292,11 @@ const grillLid=new THREE.Group();
   lbl.rotation.x=-Math.PI/2;lbl.position.set(0,0.01,1.0);grill.add(lbl);
 }
 grill.userData.act={type:'grill'};targets.push(grill);
+const grillSteam=[];
+for(let i=0;i<8;i++){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex.smoke,transparent:true,opacity:0,depthWrite:false}));
+  s.userData.t=i/8;grill.add(s);grillSteam.push(s);
+}
 const rollMat=new THREE.MeshStandardMaterial({map:tex.lavash,roughness:0.85});
 const roll=mesh(new THREE.CylinderGeometry(0.3,0.3,1.7,24),rollMat);roll.rotation.z=Math.PI/2;roll.visible=false;scene.add(roll);
 const LAVASH_C=new THREE.Color('#ffffff'),GOLD_C=new THREE.Color('#d8954a'),BURNT_C=new THREE.Color('#3a2414');
@@ -397,24 +405,26 @@ function updateDrinks(dt){
 }
 /* green digital menu boards above the kitchen; the shawarma photo is drawn in once it loads */
 const menuBoards=[];
+/* big, high-contrast lettering so the boards stay readable from the far end of the hall */
 function menuCanvas(g,w,h,title,rows){
-  const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#1f8a3a');gr.addColorStop(1,'#11612a');
+  const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#14702e');gr.addColorStop(1,'#0b4a1d');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle='#ffd23a';g.font='800 58px Onest,Arial,sans-serif';g.textAlign='left';g.fillText(title,34,74);
-  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(34,92,w-68,3);
-  g.font='600 33px Onest,Arial,sans-serif';
-  rows.forEach((r,i)=>{const y=146+i*56;g.fillStyle='#ffffff';g.fillText(r[0],34,y);g.fillStyle='#ffd23a';g.textAlign='right';g.fillText(r[1],w-34,y);g.textAlign='left';});
+  g.fillStyle='#ffd23a';g.font='900 84px Onest,Arial,sans-serif';g.textAlign='center';g.fillText(title,w/2,98);
+  g.fillStyle='rgba(255,255,255,.35)';g.fillRect(40,124,w-80,4);
+  g.font='800 54px Onest,Arial,sans-serif';g.shadowColor='rgba(0,0,0,.6)';g.shadowBlur=6;g.shadowOffsetY=3;
+  rows.forEach((r,i)=>{const y=200+i*76;g.textAlign='left';g.fillStyle='#ffffff';g.fillText(r[0],40,y);g.fillStyle='#ffd23a';g.textAlign='right';g.fillText(r[1],w-40,y);});
+  g.shadowBlur=0;g.shadowOffsetY=0;
 }
 const BOARDS=[
   {x:-4.6,title:'ШАВЕРМА',rows:[['Классическая','250 ₽'],['Говяжья','270 ₽'],['Острая','270 ₽'],['Сырная','280 ₽'],['С картошкой','290 ₽']]},
   {x:0.2,title:'ШАВЕРМА',rows:[['По-корейски','290 ₽'],['Деревенская','290 ₽'],['Овощная','220 ₽'],['Мексиканская','300 ₽'],['XL Мега','380 ₽']]},
-  {x:5.0,title:'НАПИТКИ',rows:[['Чай','60 ₽'],['Айран','60 ₽'],['Кола','60 ₽'],['Из холодильника','80 ₽']]}
+  {x:5.0,title:'НАПИТКИ',rows:[['Чай','60 ₽'],['Айран','60 ₽'],['Кола','60 ₽'],['Холодильник','80 ₽']]}
 ];
 for(const b of BOARDS){
-  const t=canvasTex(640,400,(g,w,h)=>menuCanvas(g,w,h,b.title,b.rows));
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(4.5,2.8),new THREE.MeshBasicMaterial({map:t,toneMapped:false}));
-  m.position.set(b.x,7.75,-3.3);scene.add(m);
-  const frame=mesh(new THREE.BoxGeometry(4.7,3.0,0.12),M.darkSteel,false);frame.position.set(b.x,7.75,-3.37);scene.add(frame);
+  const t=canvasTex(840,580,(g,w,h)=>menuCanvas(g,w,h,b.title,b.rows));
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(4.7,3.25),new THREE.MeshBasicMaterial({map:t,toneMapped:false}));
+  m.position.set(b.x,8.0,-3.3);scene.add(m);
+  const frame=mesh(new THREE.BoxGeometry(4.9,3.45,0.12),M.darkSteel,false);frame.position.set(b.x,8.0,-3.37);scene.add(frame);
   menuBoards.push({b,t});
 }
 {
@@ -647,7 +657,7 @@ let visible=false;
 /* camera poses; the tabs fly between them */
 const VIEWS={
   kitchen:{pos:new THREE.Vector3(0.6,6.4,10.6),look:new THREE.Vector3(0.6,1.0,-0.9),fov:38},
-  hall:{pos:new THREE.Vector3(2.8,13,30),look:new THREE.Vector3(2.8,1.2,7.6),fov:44},
+  hall:{pos:new THREE.Vector3(2.8,13.5,30),look:new THREE.Vector3(2.8,2.6,7.2),fov:44},
   /* portrait phones: steeper, closer, and allowed to crop the sides a little so the room fills the screen */
   hallTall:{pos:new THREE.Vector3(2.2,17.5,17.5),look:new THREE.Vector3(2.2,-1.5,5.6),fov:44,minAspect:0.85}
 };
@@ -695,7 +705,7 @@ function frame(){
   for(const sp of spits){
     sp.meat.rotation.y+=dt*0.45;
     const fl=1.25+Math.sin(t*7+sp.g.position.x)*0.08+Math.sin(t*13)*0.05;
-    sp.hm.emissiveIntensity=fl;sp.light.intensity=fl*5.5;
+    sp.hm.emissiveIntensity=fl;sp.light.intensity=fl*5.5;sp.glow.material.opacity=0.32+fl*0.12;
     for(const s of sp.smoke){
       s.userData.t=(s.userData.t+dt*0.18)%1;const k=s.userData.t;
       s.position.set(Math.sin(k*8+s.id)*0.25,3.7+k*2.2,0.1);
@@ -720,6 +730,12 @@ function frame(){
   }
   /* grill lid and toasting */
   lidOpen+=(lidTarget-lidOpen)*Math.min(1,dt*6);grillLid.rotation.x=-lidOpen*1.15;
+  /* steam puffs out of the press while it toasts, darker once it starts to burn */
+  for(const s of grillSteam){
+    const on=state.stage==='grill';s.userData.t=(s.userData.t+dt*0.5)%1;const k=s.userData.t;
+    s.position.set(Math.sin(k*9+s.id)*0.5,0.9+k*1.8,0.2);s.scale.setScalar(0.5+k*1.2);
+    s.material.opacity=on?Math.sin(k*Math.PI)*0.28:0;s.material.color.set(on&&state.toast>TOAST_MAX?'#555':'#fff');
+  }
   if(state.stage==='grill'){
     state.toast+=dt/5*perks.grill;toastColor(state.toast,rollMat.color);
     toastTick+=dt;if(toastTick>0.25){toastTick=0;changed();}
