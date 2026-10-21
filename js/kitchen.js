@@ -398,6 +398,16 @@ function pbr(name,repeat,mat,rotation=0){
   const map=f('diffuse');map.colorSpace=THREE.SRGBColorSpace;
   mat.map=map;mat.normalMap=f('nor_gl');mat.roughnessMap=f('rough');mat.roughness=1;mat.color.set('#ffffff');mat.needsUpdate=true;
 }
+/* photo texture of real doner meat (made from the user's reference photo); procedural meat stays until it loads */
+{
+  const bump=texLoader.load('assets/textures/doner-bump.jpg');bump.wrapS=THREE.RepeatWrapping;bump.repeat.set(2,1);
+  for(const k in MEATS){
+    texLoader.load('assets/textures/doner-'+k+'.jpg',t=>{
+      t.colorSpace=THREE.SRGBColorSpace;t.wrapS=THREE.RepeatWrapping;t.repeat.set(2,1);t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+      for(const m of [meatMat[k],meatMat[k+'Strip']]){m.map=t;m.bumpMap=bump;m.bumpScale=1.6;m.needsUpdate=true;}
+    });
+  }
+}
 pbr('long_white_tiles',new THREE.Vector2(2.9,4),M.wall,Math.PI/2);  /* rotated: horizontal metro tiles */
 pbr('kitchen_wood',new THREE.Vector2(4,4),M.wood);
 loadModel('wooden_cutting_board',3.9).then(m=>{
