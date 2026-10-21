@@ -1,6 +1,6 @@
-/* 3D kitchen: two doner spits, cutting board with lavash, vegetable bowls and sauce bottles.
-   Everything is built from code (placeholder art) so the models can later be swapped for Meshy GLBs.
-   Talks to the game through window.Kitchen (show/hide/reset/wrap/state) and window.onKitchenChange(state). */
+/* 3D open kitchen: two doner spits, cutting board with lavash, vegetables, sauces and drinks.
+   The hall (js/hall.js) lives in the same scene; the camera flies between the two views.
+   Talks to the game through window.Kitchen (setView/reset/wrap/state) and window.onKitchenChange(state). */
 import * as THREE from 'three';
 import {RoomEnvironment} from '../vendor/RoomEnvironment.js';
 import {GLTFLoader} from '../vendor/loaders/GLTFLoader.js';
@@ -34,9 +34,9 @@ camera.lookAt(0.4,1.0,-0.9);
 
 scene.add(new THREE.HemisphereLight('#fff1dc','#3a2618',0.6));
 const key=new THREE.DirectionalLight('#fff4e2',2.2);
-key.position.set(3,9,6);key.castShadow=true;
-key.shadow.mapSize.set(1024,1024);
-Object.assign(key.shadow.camera,{left:-8,right:8,top:6,bottom:-6,near:1,far:25});
+key.position.set(9,24,20);key.target.position.set(3,0,6);scene.add(key.target);key.castShadow=true;
+key.shadow.mapSize.setScalar(Math.min(window.innerWidth,window.innerHeight)<700?1024:2048);
+Object.assign(key.shadow.camera,{left:-17,right:17,top:17,bottom:-17,near:1,far:70});
 key.shadow.bias=-0.0005;
 scene.add(key);
 
@@ -148,9 +148,20 @@ for(const k in MEATS){
 function mesh(geo,mat,shadow=true){const m=new THREE.Mesh(geo,mat);m.castShadow=shadow;m.receiveShadow=true;return m;}
 
 /* ---------- room ---------- */
-const wall=mesh(new THREE.PlaneGeometry(26,18),M.wall,false);wall.position.set(0,6,-3.4);scene.add(wall);
+const wall=mesh(new THREE.PlaneGeometry(26,24),M.wall,false);wall.position.set(0,9,-3.4);scene.add(wall);
 const top=mesh(new THREE.BoxGeometry(14,0.25,5.2),M.steel,false);top.position.set(0,-0.125,-0.6);scene.add(top);
-const front=mesh(new THREE.BoxGeometry(14,12,0.2),M.wood,false);front.position.set(0,-6.1,2);  /* tall so portrait phones never see past it */scene.add(front);
+/* under-counter steel fridges, like a real shawarma kitchen */
+const fridgeTex=canvasTex(1024,220,(g,w,h)=>{
+  g.drawImage(tex.steel.image,0,0,w,h);
+  for(let i=0;i<6;i++){
+    const x=i*w/6;g.strokeStyle='rgba(30,30,30,.55)';g.lineWidth=4;g.strokeRect(x+6,10,w/6-12,h-24);
+    g.fillStyle='#d9dde1';g.fillRect(x+18,28,w/6-36,8);g.fillStyle='rgba(0,0,0,.35)';g.fillRect(x+18,36,w/6-36,3);
+    g.fillStyle='rgba(20,20,20,.5)';for(let k=0;k<5;k++)g.fillRect(x+w/12-22,h-46+k*6,44,2);
+  }
+});
+const front=mesh(new THREE.BoxGeometry(14,3,0.2),new THREE.MeshStandardMaterial({map:fridgeTex,metalness:0.8,roughness:0.35}),false);
+front.position.set(0,-1.6,2);scene.add(front);
+const plinth=mesh(new THREE.BoxGeometry(14,3,5),M.darkSteel,false);plinth.position.set(0,-1.6,-0.6);scene.add(plinth);
 
 /* ---------- spits ---------- */
 const targets=[];
@@ -333,6 +344,47 @@ function updateDrinks(dt){
   spill.visible=state.fill>FILL_MAX;spill.scale.setScalar(Math.min(1,0.3+(state.fill-FILL_MAX)*4));
 }
 
+/* ---------- kitchen dressing: hood over the spits, wall shelf, digital menu boards, sneeze guard ---------- */
+{
+  const hood=mesh(new THREE.BoxGeometry(5.6,1.1,2.4),M.steel);hood.position.set(-3.6,6.4,-2.2);scene.add(hood);
+  const lip=mesh(new THREE.BoxGeometry(5.8,0.25,2.6),M.steel);lip.position.set(-3.6,5.8,-2.1);scene.add(lip);
+  const duct=mesh(new THREE.BoxGeometry(1.4,6,1.2),M.steel,false);duct.position.set(-3.6,9.9,-2.8);scene.add(duct);
+  const shelf=mesh(new THREE.BoxGeometry(5.2,0.12,0.9),M.steel);shelf.position.set(3.4,4.3,-2.95);scene.add(shelf);
+  for(const x of [1.2,5.6]){const br=mesh(new THREE.BoxGeometry(0.08,0.6,0.8),M.steel);br.position.set(x,4.0,-2.95);scene.add(br);}
+  for(let i=0;i<5;i++){
+    const c=mesh(new THREE.BoxGeometry(0.75,0.45+((i*7)%3)*0.12,0.7),M.steel);c.position.set(1.4+i*0.95,4.36+c.geometry.parameters.height/2,-2.95);scene.add(c);
+  }
+  const glassMat=new THREE.MeshPhysicalMaterial({color:'#e8f4f8',roughness:0.02,transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false});
+  const guard=new THREE.Mesh(new THREE.PlaneGeometry(13.6,1.1),glassMat);guard.position.set(0,2.45,2.15);guard.rotation.x=-0.25;scene.add(guard);
+  for(const x of [-6.7,-2.3,2.3,6.7]){const post=mesh(new THREE.CylinderGeometry(0.04,0.04,2.4,8),M.steel);post.position.set(x,1.2,2.05);scene.add(post);}
+}
+/* green digital menu boards above the kitchen; the shawarma photo is drawn in once it loads */
+const menuBoards=[];
+function menuCanvas(g,w,h,title,rows){
+  const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#1f8a3a');gr.addColorStop(1,'#11612a');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+  g.fillStyle='#ffd23a';g.font='800 58px Onest,Arial,sans-serif';g.textAlign='left';g.fillText(title,34,74);
+  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(34,92,w-68,3);
+  g.font='600 36px Onest,Arial,sans-serif';
+  rows.forEach((r,i)=>{const y=150+i*58;g.fillStyle='#ffffff';g.fillText(r[0],34,y);g.fillStyle='#ffd23a';g.textAlign='right';g.fillText(r[1],w-34,y);g.textAlign='left';});
+}
+const BOARDS=[
+  {x:-4.6,title:'ШАВЕРМА',rows:[['С курицей','250 ₽'],['С говядиной','250 ₽'],['Острая','250 ₽'],['Сырная','250 ₽']],img:true},
+  {x:0.2,title:'НАПИТКИ',rows:[['Чай','60 ₽'],['Айран','60 ₽'],['Кола','60 ₽']]},
+  {x:5.0,title:'СОУСЫ',rows:[['Чесночный','0 ₽'],['Острый','0 ₽'],['Сырный','0 ₽']]}
+];
+for(const b of BOARDS){
+  const t=canvasTex(640,400,(g,w,h)=>menuCanvas(g,w,h,b.title,b.rows));
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(4.5,2.8),new THREE.MeshBasicMaterial({map:t,toneMapped:false}));
+  m.position.set(b.x,7.75,-3.3);scene.add(m);
+  const frame=mesh(new THREE.BoxGeometry(4.7,3.0,0.12),M.darkSteel,false);frame.position.set(b.x,7.75,-3.37);scene.add(frame);
+  menuBoards.push({b,t});
+}
+{
+  const img=new Image();img.src='assets/textures/shawarma.png';
+  img.onload=()=>{for(const mb of menuBoards)if(mb.b.img){const g=mb.t.image.getContext('2d');g.drawImage(img,470,170,84,221);mb.t.needsUpdate=true;}};
+}
+
 /* ---------- knife ---------- */
 const knife=new THREE.Group();
 {const blade=mesh(new THREE.BoxGeometry(0.95,0.2,0.02),new THREE.MeshStandardMaterial({color:'#e8ecef',metalness:1,roughness:0.15}));blade.position.x=0.48;knife.add(blade);
@@ -422,6 +474,7 @@ function moveKnife(e,sp){
 }
 const el=renderer.domElement;
 el.addEventListener('pointerdown',e=>{
+  if(view!=='kitchen')return;
   const h=pick(e);if(!h)return;
   if(h.act.type==='meat'){
     const sp=spits.find(s=>s.kind===h.act.kind);
@@ -444,7 +497,7 @@ el.addEventListener('pointermove',e=>{
     }
     return;
   }
-  el.style.cursor=pick(e)?'pointer':'default';
+  if(view==='kitchen')el.style.cursor=pick(e)?'pointer':'default';
 });
 function endDrag(){stopPour();drag=null;setTimeout(()=>{if(!drag)knife.visible=false;},250);}
 el.addEventListener('pointerup',endDrag);el.addEventListener('pointercancel',endDrag);
@@ -530,14 +583,42 @@ gltf.load('assets/models/sauce-bottle.glb',d=>{
 
 /* ---------- size + loop ---------- */
 let visible=false;
+/* camera poses; the tabs fly between them */
+const VIEWS={
+  kitchen:{pos:new THREE.Vector3(0.4,6.4,10.6),look:new THREE.Vector3(0.4,1.0,-0.9),fov:38},
+  hall:{pos:new THREE.Vector3(2.8,12,24.5),look:new THREE.Vector3(2.8,1.6,3.6),fov:44},
+  /* portrait phones: steeper, closer, and allowed to crop the sides a little so the room fills the screen */
+  hallTall:{pos:new THREE.Vector3(2.2,19,15.5),look:new THREE.Vector3(2.2,-1,3.6),fov:44,minAspect:0.85}
+};
+function pose(v){return v==='hall'&&camera.aspect<1?VIEWS.hallTall:VIEWS[v];}
+let view='hall',camT=1,camFrom=null;
+const camLook=VIEWS.hall.look.clone();
+camera.position.copy(VIEWS.hall.pos);camera.lookAt(camLook);
+/* keep the scene's width in frame: below 1.6:1 widen the vertical FOV so the horizontal view stays the same */
+function fovFor(base,minAspect=0){
+  const a=Math.max(camera.aspect,minAspect),half=Math.tan(THREE.MathUtils.degToRad(base/2));
+  return a>=1.6?base:THREE.MathUtils.radToDeg(2*Math.atan(half*1.6/a));
+}
+function setView(v,instant){
+  if(!VIEWS[v])return;
+  camFrom={pos:camera.position.clone(),look:camLook.clone(),fov:camera.fov,view};
+  view=v;camT=instant?1:0;
+  hint.hidden=v!=='kitchen';
+  if(v!=='kitchen')stopPour();
+  if(window.Sfx)Sfx.loop('sizzle',v==='kitchen');
+  if(instant)applyCam(1);
+}
+function applyCam(e){
+  const V=pose(view);
+  if(camFrom&&e<1){camera.position.lerpVectors(camFrom.pos,V.pos,e);camLook.lerpVectors(camFrom.look,V.look,e);camera.fov=THREE.MathUtils.lerp(camFrom.fov,fovFor(V.fov,V.minAspect),e);}
+  else{camera.position.copy(V.pos);camLook.copy(V.look);camera.fov=fovFor(V.fov,V.minAspect);}
+  camera.lookAt(camLook);camera.updateProjectionMatrix();
+}
 function resize(){
   const w=root.clientWidth,h=root.clientHeight;if(!w||!h)return;
-  renderer.setSize(w,h,false);camera.aspect=w/h;
-  /* keep the whole counter in frame: below 1.6:1 widen the vertical FOV so the horizontal view stays the same */
-  const a=w/h,half=Math.tan(THREE.MathUtils.degToRad(19));
-  camera.fov=a>=1.6?38:THREE.MathUtils.radToDeg(2*Math.atan(half*1.6/a));
-  camera.updateProjectionMatrix();
+  renderer.setSize(w,h,false);camera.aspect=w/h;applyCam(camT>=1?1:camT);
 }
+const hooks=[];
 new ResizeObserver(resize).observe(root);
 
 const clock=new THREE.Clock();
@@ -545,6 +626,8 @@ function frame(){
   requestAnimationFrame(frame);
   const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
   if(!visible)return;
+  if(camT<1){camT=Math.min(1,camT+dt/0.8);const e=camT<0.5?2*camT*camT:1-Math.pow(-2*camT+2,2)/2;applyCam(e);}
+  for(const h of hooks)h(dt,t);
   updateDrinks(dt);
   for(const sp of spits){
     sp.meat.rotation.y+=dt*0.45;
@@ -591,13 +674,17 @@ function frame(){
 frame();
 
 window.Kitchen={
-  show(){root.hidden=false;visible=true;resize();if(window.Sfx)Sfx.loop('sizzle',true);},
-  hide(){root.hidden=true;visible=false;stopPour();if(window.Sfx)Sfx.loop('sizzle',false);},
+  /* the 3D view replaces the flat hall for good once it starts */
+  start(){root.hidden=false;visible=true;resize();setView(view,true);},
+  setView(v){setView(v);},
+  get view(){return view;},
   setOrder(o){order=o;updateHint();},
   FILL_OK,FILL_MAX,
   reset,wrap,
   get state(){return Object.assign({},state);},
   MEAT_NEED
 };
-updateHint();
-document.dispatchEvent(new Event('kitchenready'));
+updateHint();hint.hidden=true;
+export {THREE,scene,camera,renderer,root,hooks,gltf,texLoader,fitted,pbr,labelTex,canvasTex,mesh,M,PH};
+/* the hall module adds itself before the game is told the scene is ready */
+import('./hall.js').catch(err=>console.error('hall',err)).finally(()=>document.dispatchEvent(new Event('kitchenready')));

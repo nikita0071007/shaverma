@@ -131,6 +131,23 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   #msg{min-height:16px;font-size:12px}
 }
 .ovbtns{display:flex;flex-wrap:wrap;gap:10px}
+.stage:has(#cv[hidden]){aspect-ratio:16/10}   /* 3D mode: the stage keeps the flat hall's proportions */
+@media (max-width:700px){.stage:has(#cv[hidden]){aspect-ratio:auto}}
+.bubbles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.bub{position:absolute;left:0;top:0;pointer-events:auto;border:2px solid #2B1D14;background:#FFF6E0;border-radius:10px;padding:4px 7px 6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 3px 8px rgba(0,0,0,.3)}
+.bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:#2B1D14;border-bottom:0}
+.bub.sel{border-color:var(--turmeric);box-shadow:0 0 0 3px rgba(242,169,59,.45)}
+.bub.courier{background:#FFF1B8}
+.bub .pt{display:block;height:4px;border-radius:2px;background:rgba(0,0,0,.2);overflow:hidden}
+.bub .pt i{display:block;height:100%}
+.bub .ic{display:flex;gap:5px;align-items:center}
+.bub .ic i{display:block;width:14px;height:14px;border:1px solid rgba(0,0,0,.35)}
+.bub .dot{border-radius:50%}
+.bub .sq{border-radius:3px}
+.bub .ring{border-radius:50%;border:2.5px solid #9B6BB8!important;background:transparent;position:relative}
+.bub .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
+.bub .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:16px!important}
+.flt{position:absolute;left:0;top:0;font-weight:700;font-size:15px;white-space:nowrap;text-shadow:0 1px 0 #1a120c,0 0 6px rgba(0,0,0,.7)}
 .mute{font-size:18px;line-height:1;cursor:pointer;color:var(--cream);min-width:0;padding:8px 12px}
 .mute[aria-pressed="true"]{opacity:.55}
 .overlay p.credits{color:var(--muted);font-size:12px;margin-top:auto}
@@ -437,14 +454,20 @@ function setView(v){
   view=v;
   document.getElementById('tabHall').setAttribute('aria-pressed',v==='hall'?'true':'false');
   document.getElementById('tabKitchen').setAttribute('aria-pressed',v==='kitchen'?'true':'false');
-  if(K()){if(v==='kitchen')K().show();else K().hide();}
+  if(K())K().setView(v);
 }
+/* the 3D scene (open kitchen + hall) takes over from the flat hall once it is ready */
+window.Game={
+  get G(){return G;},
+  COURIER_BRAND:COURIER_BRAND,
+  select:function(c){if(G.phase!=='play'||c.state!=='wait')return;sfx('click');G.sel=c;updateTicket();setView('kitchen');}
+};
 document.getElementById('tabHall').onclick=function(){sfx('click');setView('hall');};
 document.getElementById('tabKitchen').onclick=function(){sfx('click');setView('kitchen');};
 var muteBtn=document.getElementById('mute');
 function syncMute(){var m=window.Sfx&&Sfx.muted;muteBtn.textContent=m?'🔇':'🔊';muteBtn.setAttribute('aria-pressed',m?'true':'false');}
 muteBtn.onclick=function(){if(window.Sfx){Sfx.muted=!Sfx.muted;syncMute();}};syncMute();
-document.addEventListener('kitchenready',function(){setView(view);renderBuild();});
+document.addEventListener('kitchenready',function(){cv.hidden=true;K().start();setView(view);renderBuild();});
 function orderText(o){
   return MEAT[o.meat].name+', '+SAUCE[o.sauce].name.toLowerCase()+' соус, '+(o.onion?'с луком':'без лука')+(o.drink?' + '+DRINK[o.drink].name.toLowerCase():'');
 }
@@ -654,7 +677,7 @@ function draw(){
 var last=performance.now();
 function frame(now){
   var dt=Math.min(.05,(now-last)/1000);last=now;
-  update(dt);draw();requestAnimationFrame(frame);
+  update(dt);if(!cv.hidden)draw();requestAnimationFrame(frame);
 }
 newGame();
 var saved=loadSave();if(saved)applySave(saved);

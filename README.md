@@ -14,3 +14,6 @@
 - `assets/polyhaven/` — бесплатные модели и текстуры с [Poly Haven](https://polyhaven.com) (лицензия CC0): разделочная доска, деревянная миска, лук, плитка, дерево.
 - `assets/models/sauce-bottle.glb` — бутылка соуса, сгенерирована в [Meshy](https://www.meshy.ai) (бесплатный тариф, CC BY 4.0: «3D-модели: Meshy»).
 - `assets/textures/` — текстуры мяса и картинка готовой шавермы из присланных изображений.
+- `js/hall.js` — 3D-зал перед открытой кухней: столы, стулья, лампы, растения, дверь, гости и курьеры, пузыри заказов.
+- `js/sound.js` — звуки, синтезированные Web Audio.
+- `assets/models/courier.glb` — курьер из Meshy (CC BY 4.0), упрощён gltfpack.
