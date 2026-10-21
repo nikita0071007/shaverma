@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Моя шаверма</title>
+<meta name="theme-color" content="#1F1712">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@600&display=swap">
 <style>
 /* Layout: one column. Stage (hall or 3D kitchen, switched by tabs) on top, order panel under it; day summary slides over the stage. */
@@ -86,11 +93,42 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   .main{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
   .main .panel{margin-top:44px}
 }
-/* Phones: the floor is too small to hold intro/summary text, so the overlay replaces it while open. */
-@media (max-width:600px){
-  .stage:has(.overlay:not([hidden])) #cv,.stage:has(.overlay:not([hidden])) .kitchen{display:none}
-  .overlay{position:static}
+/* Phones: full-screen game, no page scroll. Compact HUD on top, the stage takes all free height,
+   tabs float over it, and a short order bar with the buttons sits at the bottom within thumb reach. */
+@media (max-width:700px){
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  body{padding:0;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  .wrap{height:100dvh;max-width:none;gap:6px;
+    padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+  .top{display:flex;align-items:center;gap:8px}
+  .top header{display:none}
+  .hud{flex:1;gap:4px;flex-wrap:nowrap;min-width:0}
+  .stat{min-width:0;padding:3px 7px;flex:none}
+  .stat .k{font-size:9px}
+  .stat .v{font-size:13px}
+  .timebox{flex:1;padding:3px 7px;gap:3px}
+  .timebox .k{font-size:9px}
+  .timebox .k span:first-child{display:none}
+  .main{flex:1;min-height:0;gap:6px}
+  .col{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+  .tabs{position:absolute;top:8px;left:8px;z-index:3;margin:0}
+  .tab{padding:5px 12px;font-size:13px;background:rgba(43,32,25,.88)}
+  .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+  #cv{max-height:100%;width:auto;max-width:100%;height:auto}
+  .overlay{padding:56px 14px 14px}
   .khint{font-size:12px;bottom:8px;padding:4px 10px}
+  .panel{flex:none;padding:8px;gap:6px}
+  .ticket{padding:6px 10px;min-height:0}
+  .ticket .lbl{display:none}
+  .ticket p{font-size:14px}
+  .tbar{margin-top:5px;height:4px}
+  .panel .lbl{display:none}
+  .build{flex-direction:row;flex-wrap:wrap;gap:4px}
+  .build li{border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:12px;gap:4px}
+  .build li span:first-child::after{content:':'}
+  .build li.on{border-color:var(--turmeric)}
+  .btn{padding:10px 14px}
+  #msg{min-height:16px;font-size:12px}
 }
 .ovbtns{display:flex;flex-wrap:wrap;gap:10px}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
@@ -114,7 +152,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   </div>
 
   <div class="main">
-  <div>
+  <div class="col">
   <div class="tabs">
     <button class="tab" id="tabHall" aria-pressed="true">Зал <span id="waitN"></span></button>
     <button class="tab" id="tabKitchen" aria-pressed="false">Кухня</button>

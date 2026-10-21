@@ -148,9 +148,9 @@ for(const k in MEATS){
 function mesh(geo,mat,shadow=true){const m=new THREE.Mesh(geo,mat);m.castShadow=shadow;m.receiveShadow=true;return m;}
 
 /* ---------- room ---------- */
-const wall=mesh(new THREE.PlaneGeometry(26,10),M.wall,false);wall.position.set(0,3,-3.4);scene.add(wall);
+const wall=mesh(new THREE.PlaneGeometry(26,18),M.wall,false);wall.position.set(0,6,-3.4);scene.add(wall);
 const top=mesh(new THREE.BoxGeometry(14,0.25,5.2),M.steel,false);top.position.set(0,-0.125,-0.6);scene.add(top);
-const front=mesh(new THREE.BoxGeometry(14,3,0.2),M.wood,false);front.position.set(0,-1.6,2);scene.add(front);
+const front=mesh(new THREE.BoxGeometry(14,12,0.2),M.wood,false);front.position.set(0,-6.1,2);  /* tall so portrait phones never see past it */scene.add(front);
 
 /* ---------- spits ---------- */
 const targets=[];
@@ -398,8 +398,8 @@ function pbr(name,repeat,mat,rotation=0){
   const map=f('diffuse');map.colorSpace=THREE.SRGBColorSpace;
   mat.map=map;mat.normalMap=f('nor_gl');mat.roughnessMap=f('rough');mat.roughness=1;mat.color.set('#ffffff');mat.needsUpdate=true;
 }
-pbr('long_white_tiles',new THREE.Vector2(1.6,4),M.wall,Math.PI/2);  /* rotated: horizontal metro tiles */
-pbr('kitchen_wood',new THREE.Vector2(4,1),M.wood);
+pbr('long_white_tiles',new THREE.Vector2(2.9,4),M.wall,Math.PI/2);  /* rotated: horizontal metro tiles */
+pbr('kitchen_wood',new THREE.Vector2(4,4),M.wood);
 loadModel('wooden_cutting_board',3.9).then(m=>{
   if(!m)return;
   m.position.copy(board.position).setY(0);scene.add(m);board.visible=false;
@@ -422,7 +422,9 @@ let visible=false;
 function resize(){
   const w=root.clientWidth,h=root.clientHeight;if(!w||!h)return;
   renderer.setSize(w,h,false);camera.aspect=w/h;
-  camera.fov=w/h<1.2?52:38;                /* narrow phones: widen the view so the counter fits */
+  /* keep the whole counter in frame: below 1.6:1 widen the vertical FOV so the horizontal view stays the same */
+  const a=w/h,half=Math.tan(THREE.MathUtils.degToRad(19));
+  camera.fov=a>=1.6?38:THREE.MathUtils.radToDeg(2*Math.atan(half*1.6/a));
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(root);
