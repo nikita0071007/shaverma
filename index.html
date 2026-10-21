@@ -73,12 +73,35 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .btns .btn{flex:1}
 #msg{margin:0;min-height:40px;font-size:13px;color:var(--muted);text-align:center;width:100%}
 @media (max-width:600px){.panel{grid-template-columns:minmax(0,1fr)}}
+/* Wide screens: header and HUD share a row, order panel sits beside the floor so nothing needs scrolling. */
+.main{display:flex;flex-direction:column;gap:14px}
+@media (min-width:1000px){
+  .wrap{max-width:clamp(940px,calc((100vh - 130px)*1.6 + 354px),1280px)}
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+  .hud{flex:0 1 640px}
+  .main{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
+  .panel{grid-template-columns:minmax(0,1fr);gap:10px}
+  .chips{gap:6px}
+  .chips button{padding:6px 11px;font-size:14px;gap:6px}
+  .ticket{margin-bottom:10px}
+  .serve{display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:10px 12px}
+  .serve .btns{flex-direction:column}
+  #pv{width:120px;height:96px}
+  #msg{grid-column:1/-1;min-height:20px}
+}
+/* Phones: the floor is too small to hold intro/summary text, so the overlay replaces it while open. */
+@media (max-width:600px){
+  .stage:has(.overlay:not([hidden])) #cv{display:none}
+  .overlay{position:static}
+}
+.ovbtns{display:flex;flex-wrap:wrap;gap:10px}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>
 <body>
 
 <div class="wrap">
+  <div class="top">
   <header>
     <h1>Моя шаверма</h1>
     <p class="sub">Прототип: кафе внутри, гости, заказы и сборка шавермы</p>
@@ -90,7 +113,9 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
     <div class="stat"><span class="k">Репутация</span><span class="v" id="hRep">3.0 ★</span></div>
     <div class="timebox"><span class="k"><span>До закрытия</span><span id="hLeft">—</span></span><div class="bar"><i id="hTime"></i></div></div>
   </div>
+  </div>
 
+  <div class="main">
   <div class="stage">
     <canvas id="cv" width="640" height="400" aria-label="Зал шаурмичной"></canvas>
     <div class="overlay" id="ov"></div>
@@ -125,6 +150,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
       <p id="msg" aria-live="polite"></p>
     </div>
   </section>
+  </div>
 </div>
 
 <script>
@@ -151,6 +177,21 @@ var anim=0;
 function newGame(){
   G={phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
 }
+/* ---------- save ---------- */
+/* Progress is saved between days: a reload mid-day restarts that day with the money it opened with. */
+var SAVE_KEY='shaverma-save-v1';
+function save(){
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign}));}catch(e){}
+}
+function loadSave(){
+  try{var s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.v===1)return s;}catch(e){}
+  return null;
+}
+function clearSave(){try{localStorage.removeItem(SAVE_KEY);}catch(e){}}
+function applySave(s){
+  G.day=Math.max(1,s.day|0);G.money=Math.max(0,+s.money||0);G.rep=clamp(+s.rep||3,1,5);
+  G.tables=clamp(s.tables|0,3,6);G.comfort=clamp(s.comfort|0,0,3);G.sign=clamp(s.sign|0,0,3);
+}
 function dayLen(){return Math.min(120,80+(G.day-1)*5);}
 function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -170,6 +211,19 @@ function showOv(html){ov.innerHTML=html;ov.hidden=false;}
 function hideOv(){ov.hidden=true;}
 function showIntro(){
   G.phase='intro';
+  if(G.day>1){
+    showOv('<h2>С возвращением!</h2>'+
+      '<p>Шаверма ждёт. Прогресс сохранён.</p>'+
+      '<div class="facts"><span>День: <b>'+G.day+'</b></span><span>В кассе: <b>'+fmt(G.money)+'</b></span><span>Репутация: <b>'+G.rep.toFixed(1)+' ★</b></span><span>Столиков: <b>'+G.tables+'</b></span></div>'+
+      '<div class="ovbtns"><button class="btn go" id="start">Открыть день '+G.day+'</button><button class="btn" id="wipe">Начать заново</button></div>');
+    document.getElementById('start').onclick=startDay;
+    var wipe=document.getElementById('wipe');
+    wipe.onclick=function(){
+      if(!wipe.dataset.sure){wipe.dataset.sure='1';wipe.textContent='Точно? Прогресс сотрётся';return;}
+      clearSave();newGame();hud();showIntro();
+    };
+    return;
+  }
   showOv('<h2>Открываем шаверму</h2>'+
     '<p>Гости заходят, садятся за столики и ждут заказ. Чем быстрее и точнее вы соберёте шаверму, тем больше чаевых и выше репутация.</p>'+
     '<ol><li>Нажмите на гостя с пузырём заказа.</li><li>Выберите мясо, лук и соус как в заказе.</li><li>Нажмите «Подать».</li></ol>'+
@@ -186,6 +240,7 @@ var UPG=[
 ];
 function showSummary(){
   G.phase='summary';
+  save();
   var s=G.stats;
   var h='<h2>День '+G.day+' закончен</h2>'+
     '<div class="facts"><span>Заработано: <b>'+fmt(s.earned)+'</b></span><span>Обслужено: <b>'+s.served+'</b></span><span>Ушли недовольными: <b>'+s.lost+'</b></span><span>Репутация: <b>'+G.rep.toFixed(1)+' ★</b></span><span>В кассе: <b>'+fmt(G.money)+'</b></span></div>'+
@@ -511,7 +566,9 @@ function frame(now){
   var dt=Math.min(.05,(now-last)/1000);last=now;
   update(dt);draw();requestAnimationFrame(frame);
 }
-newGame();hud();drawBuild();showIntro();
+newGame();
+var saved=loadSave();if(saved)applySave(saved);
+hud();drawBuild();showIntro();
 requestAnimationFrame(frame);
 })();
 </script>
