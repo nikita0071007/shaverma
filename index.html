@@ -131,6 +131,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   #msg{min-height:16px;font-size:12px}
 }
 .ovbtns{display:flex;flex-wrap:wrap;gap:10px}
+.overlay p.credits{color:var(--muted);font-size:12px;margin-top:auto}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>
@@ -250,7 +251,8 @@ function showIntro(){
   showOv('<h2>Открываем шаверму</h2>'+
     '<p>Гости заходят, садятся за столики и ждут заказ. Чем быстрее и точнее вы соберёте шаверму, тем больше чаевых и выше репутация.</p>'+
     '<ol><li>Нажмите на гостя с пузырём заказа — откроется кухня.</li><li>Проведите по нужному вертелу, чтобы срезать мясо, добавьте помидоры и огурцы, лук — если просили, и полейте соусом.</li><li>Нажмите «Подать».</li></ol>'+
-    '<button class="btn go" id="start">Открыть день 1</button>');
+    '<button class="btn go" id="start">Открыть день 1</button>'+
+    '<p class="credits">3D-модели: Meshy (CC BY 4.0), Poly Haven (CC0)</p>');
   document.getElementById('start').onclick=startDay;
 }
 var UPG=[
@@ -537,9 +539,11 @@ function drawTable(i){
   ctx.beginPath();ctx.ellipse(x,y,36,22,0,0,Math.PI*2);ctx.fill();ctx.stroke();
   ctx.fillStyle='#fff';rr(ctx,x+14,y-6,8,10,2);ctx.fill();
 }
+var wrapImg=new Image();wrapImg.src='assets/textures/shawarma.png';
 function drawPlate(c){
   var x=TABLES[c.table][0],y=TABLES[c.table][1];
-  ctx.fillStyle='#F8F4EA';ctx.beginPath();ctx.ellipse(x-6,y,15,9,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#F8F4EA';ctx.beginPath();ctx.ellipse(x-6,y+4,15,9,0,0,Math.PI*2);ctx.fill();
+  if(wrapImg.complete&&wrapImg.naturalWidth){ctx.drawImage(wrapImg,x-15,y-30,18,48);return;}
   ctx.fillStyle='#D9B27A';rr(ctx,x-16,y-5,20,9,4);ctx.fill();
   ctx.fillStyle=MEAT[c.order.meat].c;rr(ctx,x-13,y-3,14,3,1.5);ctx.fill();
 }

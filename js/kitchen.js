@@ -248,7 +248,7 @@ function makeBottle(key,x,z){
   const nozzle=mesh(new THREE.ConeGeometry(0.07,0.36,16),M.ceramic);nozzle.position.y=1.42;g.add(nozzle);
   const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.5,0.13),new THREE.MeshBasicMaterial({map:labelTex(SAUCES[key].name,'#2b1d14','#f6e7c8')}));
   lbl.position.set(0,0.55,0.295);g.add(lbl);
-  g.userData.act={type:'sauce',key};targets.push(g);
+  g.userData.act={type:'sauce',key};targets.push(g);g.userData.stub=[body,nozzle];g.userData.label=lbl;
   scene.add(g);bottles[key]=g;
 }
 makeBottle('garlic',3.7,1.1);
@@ -427,6 +427,23 @@ loadModel('yellow_onion',0.42).then(m=>{
   [[1.75,-1.05,0.4],[1.95,-0.6,2.1]].forEach(([x,z,r])=>{const o=m.clone();o.position.set(x,0,z);o.rotation.y=r;scene.add(o);});
 });
 
+/* finished shawarma (cut-out photo) shown when an order is wrapped */
+const served=new THREE.Sprite(new THREE.SpriteMaterial({map:texLoader.load('assets/textures/shawarma.png',t=>{t.colorSpace=THREE.SRGBColorSpace;}),transparent:true,depthTest:false}));
+served.visible=false;served.renderOrder=10;scene.add(served);
+
+/* Meshy sauce bottle (CC BY 4.0, Meshy). The one white model is tinted per sauce. */
+gltf.load('assets/models/sauce-bottle.glb',d=>{
+  const m=fitted(d.scene,0.62);
+  const tint={garlic:null,spicy:'#e2442c',cheese:'#f2c13a'};
+  for(const k in bottles){
+    const b=bottles[k],c=m.clone(true);
+    c.traverse(o=>{if(o.isMesh&&tint[k]){o.material=o.material.clone();o.material.color.set(tint[k]);}});
+    b.add(c);b.userData.stub.forEach(s=>s.visible=false);
+    const r=new THREE.Box3().setFromObject(c).getSize(new THREE.Vector3()).z/2;
+    b.userData.label.position.set(0,0.42,r+0.02);b.userData.label.scale.setScalar(1.15);   /* label sits on the bottle's surface */
+  }
+});
+
 /* ---------- size + loop ---------- */
 let visible=false;
 function resize(){
@@ -471,10 +488,18 @@ function frame(){
       b.rotation.z=s*0.9;b.position.y=s*0.6;b.scale.set(1+s*0.06,1-s*0.06,1+s*0.06);}
   }
   if(wrapAnim){
-    wrapAnim.t+=dt/0.75;const k=Math.min(wrapAnim.t,1);
-    if(k<0.55){const q=k/0.55;lavash.scale.set(1,1+q*0.6,1-q*0.72);}
-    else{const q=(k-0.55)/0.45;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));lavash.position.y=lavashY+q*1.5;}
-    if(k>=1){const done=wrapAnim.done;wrapAnim=null;reset();if(done)done();}
+    /* roll the lavash, shrink it away, and pop the finished shawarma up in its place */
+    wrapAnim.t+=dt/1.6;const k=Math.min(wrapAnim.t,1);
+    if(k<0.25){const q=k/0.25;lavash.scale.set(1,1+q*0.6,1-q*0.72);}
+    else if(k<0.4){const q=(k-0.25)/0.15;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));lavash.position.y=lavashY+q*0.8;}
+    else lavash.scale.set(0.001,0.001,0.001);
+    if(k>=0.3){
+      const q=(k-0.3)/0.7,pop=Math.min(1,q/0.2),bounce=pop<1?pop*(1.15-0.15*pop):1;
+      served.visible=true;served.scale.set(0.95*bounce,2.5*bounce,1);
+      served.position.set(lavash.position.x,lavashY+1.3*bounce+q*0.4,lavash.position.z);
+      served.material.opacity=q>0.8?1-(q-0.8)/0.2:1;
+    }
+    if(k>=1){const done=wrapAnim.done;wrapAnim=null;served.visible=false;reset();if(done)done();}
   }
   renderer.render(scene,camera);
 }
