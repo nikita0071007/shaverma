@@ -255,6 +255,84 @@ makeBottle('garlic',3.7,1.1);
 makeBottle('spicy',4.5,1.1);
 makeBottle('cheese',5.3,1.1);
 
+/* ---------- drinks: hold a jug to pour into the glass; the green ring marks "full enough" ---------- */
+const DRINKS={tea:{name:'ЧАЙ',c:'#9a4a1c',op:0.85},ayran:{name:'АЙРАН',c:'#f3efe4',op:0.97},cola:{name:'КОЛА',c:'#2a0f06',op:0.92}};
+const FILL_OK=0.7,FILL_MAX=1.02,GLASS_H=0.85,GLASS_R=0.26;
+const glass=new THREE.Group();glass.position.set(-2.05,0,1.4);scene.add(glass);
+{
+  const shell=new THREE.Mesh(new THREE.CylinderGeometry(GLASS_R+0.03,GLASS_R-0.02,GLASS_H,32,1,true),
+    new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:0.05,transparent:true,opacity:0.3,clearcoat:1,side:THREE.DoubleSide,depthWrite:false}));
+  shell.position.y=GLASS_H/2;shell.renderOrder=2;glass.add(shell);
+  const bottom=mesh(new THREE.CylinderGeometry(GLASS_R-0.02,GLASS_R-0.02,0.05,32),new THREE.MeshPhysicalMaterial({color:'#dfe8ea',roughness:0.1,transparent:true,opacity:0.6}));
+  bottom.position.y=0.025;glass.add(bottom);
+  const mark=new THREE.Mesh(new THREE.TorusGeometry(GLASS_R+0.035,0.01,6,40),new THREE.MeshBasicMaterial({color:'#8fb339'}));
+  mark.rotation.x=Math.PI/2;mark.position.y=0.05+FILL_OK*(GLASS_H-0.1);glass.add(mark);
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.22),new THREE.MeshBasicMaterial({map:labelTex('СТАКАН','#2b1d14','#f6e7c8')}));
+  lbl.rotation.x=-Math.PI/2;lbl.position.set(0,0.01,0.55);glass.add(lbl);
+}
+const liquidMat=new THREE.MeshPhysicalMaterial({color:'#9a4a1c',roughness:0.1,transparent:true,opacity:0.9,clearcoat:1});
+const liquid=new THREE.Mesh(new THREE.CylinderGeometry(GLASS_R-0.01,GLASS_R-0.03,1,32),liquidMat);liquid.visible=false;glass.add(liquid);
+const spill=new THREE.Mesh(new THREE.CircleGeometry(0.55,32),liquidMat);spill.rotation.x=-Math.PI/2;spill.position.y=0.006;spill.visible=false;glass.add(spill);
+const stream=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1,10),liquidMat);stream.visible=false;scene.add(stream);
+glass.userData.act={type:'glass'};targets.push(glass);
+
+const jugs={};
+function makeJug(key,x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);g.userData.home=g.position.clone();g.userData.p=0;
+  const v=pts=>pts.map(p=>new THREE.Vector2(p[0],p[1]));
+  let body;
+  if(key==='cola'){
+    body=mesh(new THREE.LatheGeometry(v([[0,0],[0.24,0],[0.25,0.04],[0.25,0.8],[0.12,1.05],[0.09,1.3],[0.1,1.36],[0,1.36]]),32),
+      new THREE.MeshPhysicalMaterial({color:'#3a1408',roughness:0.05,clearcoat:1}));
+    const cap=mesh(new THREE.CylinderGeometry(0.1,0.1,0.08,16),new THREE.MeshStandardMaterial({color:'#c8201c',roughness:0.4}));cap.position.y=1.4;g.add(cap);
+    const band=mesh(new THREE.CylinderGeometry(0.256,0.256,0.3,32,1,true),new THREE.MeshStandardMaterial({color:'#c8201c',roughness:0.5}));band.position.y=0.45;g.add(band);
+  }else{
+    const tea=key==='tea';
+    body=mesh(new THREE.LatheGeometry(v(tea?[[0,0],[0.3,0],[0.42,0.15],[0.45,0.4],[0.38,0.65],[0.2,0.75],[0.12,0.8],[0,0.8]]
+                                          :[[0,0],[0.26,0],[0.3,0.1],[0.3,0.8],[0.22,1.0],[0.24,1.1],[0,1.1]]),32),
+      new THREE.MeshPhysicalMaterial({color:tea?'#b4502a':'#f4f0e6',roughness:0.2,clearcoat:0.8}));
+    const spout=mesh(new THREE.CylinderGeometry(0.04,0.07,0.45,12),body.material);
+    spout.position.set(tea?0.5:0.3,tea?0.5:0.95,0);spout.rotation.z=-0.9;g.add(spout);
+    if(tea){const lid=mesh(new THREE.SphereGeometry(0.12,16,8),body.material);lid.position.y=0.82;g.add(lid);}
+  }
+  g.add(body);
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.75,0.19),new THREE.MeshBasicMaterial({map:labelTex(DRINKS[key].name,'#2b1d14','#f6e7c8')}));
+  lbl.rotation.x=-Math.PI/2;lbl.position.set(x,0.01,z+0.6);scene.add(lbl);   /* stays on the counter while the jug pours */
+  g.userData.act={type:'drink',key};targets.push(g);scene.add(g);jugs[key]=g;
+}
+makeJug('tea',-4.75,1.3);makeJug('ayran',-3.85,1.3);makeJug('cola',-3.0,1.3);
+let pouring=null,pourTick=0;
+function startPour(key){
+  pouring={key};
+  state.drink=!state.drink||state.drink===key?key:'mixed';
+  liquidMat.color.set(state.drink==='mixed'?'#6b4a2a':DRINKS[key].c);liquidMat.opacity=DRINKS[key].op;
+  if(window.Sfx)Sfx.loop('pour',true);
+}
+function stopPour(){
+  if(!pouring)return;
+  pouring=null;stream.visible=false;if(window.Sfx)Sfx.loop('pour',false);changed();
+}
+function emptyGlass(){state.drink=null;state.fill=0;if(window.Sfx)Sfx.play('click');changed();}
+function updateDrinks(dt){
+  const target=new THREE.Vector3(glass.position.x-0.6,1.15,glass.position.z);
+  for(const k in jugs){
+    const j=jugs[k],on=!!(pouring&&pouring.key===k);
+    j.userData.p=THREE.MathUtils.clamp(j.userData.p+(on?dt:-dt)*4,0,1);
+    const p=j.userData.p;j.position.lerpVectors(j.userData.home,target,p);j.rotation.z=-1.25*p;
+  }
+  if(pouring&&jugs[pouring.key].userData.p>0.9){
+    state.fill+=dt*0.3;
+    const top=0.05+Math.min(state.fill,1)*(GLASS_H-0.1),y0=1.45;
+    stream.visible=true;stream.scale.y=Math.max(0.01,y0-top);
+    stream.position.set(glass.position.x-0.05,(y0+top)/2,glass.position.z);
+    if(window.Sfx)Sfx.pourLevel(Math.min(state.fill,1));
+    pourTick+=dt;if(pourTick>0.12){pourTick=0;changed();}
+  }else stream.visible=false;
+  const h=Math.min(state.fill,1)*(GLASS_H-0.1);
+  liquid.visible=state.fill>0.01;liquid.scale.y=Math.max(h,0.001);liquid.position.y=0.05+h/2;
+  spill.visible=state.fill>FILL_MAX;spill.scale.setScalar(Math.min(1,0.3+(state.fill-FILL_MAX)*4));
+}
+
 /* ---------- knife ---------- */
 const knife=new THREE.Group();
 {const blade=mesh(new THREE.BoxGeometry(0.95,0.2,0.02),new THREE.MeshStandardMaterial({color:'#e8ecef',metalness:1,roughness:0.15}));blade.position.x=0.48;knife.add(blade);
@@ -262,7 +340,8 @@ const knife=new THREE.Group();
 knife.visible=false;scene.add(knife);
 
 /* ---------- state ---------- */
-function blank(){return {meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null};}
+function blank(){return {meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null,drink:null,fill:0};}
+let order=null;   /* the selected guest's order, only used for hints */
 let state=blank();
 function changed(){updateHint();if(window.onKitchenChange)window.onKitchenChange(Object.assign({},state));}
 function updateHint(){
@@ -271,6 +350,8 @@ function updateHint(){
   else if(state.meatN<MEAT_NEED)t='Срежьте ещё '+(MEAT_NEED-state.meatN);
   else if(!state.tomato||!state.cucumber)t='Добавьте помидоры и огурцы';
   else if(!state.sauce)t='Лук, если просили, и соус';
+  else if(state.fill>FILL_MAX)t='Перелили! Нажмите на стакан, чтобы вылить';
+  else if(order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK))t='Налейте '+DRINKS[order.drink].name.toLowerCase()+': держите палец на кувшине до зелёной черты';
   else t='Готово? Нажмите «Подать»';
   hint.textContent=t;
 }
@@ -293,6 +374,7 @@ const stripGeo=(()=>{
 function shave(sp,point){
   if(state.meatN>=MEAT_MAX){hint.textContent='Мяса уже достаточно';return;}
   state.meatN++;
+  if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
   state.meat=!state.meat||state.meat===sp.kind?sp.kind:'mixed';
   sp.shrink=Math.max(0.86,sp.shrink-0.006);sp.meat.scale.set(sp.shrink,1,sp.shrink);
   for(let i=0;i<3;i++){
@@ -303,7 +385,7 @@ function shave(sp,point){
   changed();
 }
 function addVeg(kind){
-  state[kind]=true;
+  state[kind]=true;if(window.Sfx)Sfx.play('drop');
   const from=bowls[kind].localToWorld(new THREE.Vector3(0,0.4,0));
   for(let i=0;i<6;i++){const p=piece(kind);p.rotation.y=rnd(0,6.28);fly(p,from,spot(0.8,0.35,0.13+rnd(0,0.05)),0.45+i*0.05,0.9);}
   changed();
@@ -316,7 +398,7 @@ function addSauce(key){
   const m=mesh(geo,new THREE.MeshPhysicalMaterial({color:SAUCES[key].c,roughness:0.2,clearcoat:1}),false);
   geo.setDrawRange(0,0);fill.add(m);
   sauceAnims.push({geo,t:0,total:geo.index.count});
-  const b=bottles[key];b.userData.tilt=1;
+  const b=bottles[key];b.userData.tilt=1;if(window.Sfx)Sfx.play('squeeze');
   changed();
 }
 
@@ -347,6 +429,8 @@ el.addEventListener('pointerdown',e=>{
     moveKnife(e,sp);shave(sp,h.point);
   }else if(h.act.type==='veg')addVeg(h.act.kind);
   else if(h.act.type==='sauce')addSauce(h.act.key);
+  else if(h.act.type==='drink'){startPour(h.act.key);el.setPointerCapture(e.pointerId);}
+  else if(h.act.type==='glass')emptyGlass();
 });
 el.addEventListener('pointermove',e=>{
   if(drag){
@@ -362,7 +446,7 @@ el.addEventListener('pointermove',e=>{
   }
   el.style.cursor=pick(e)?'pointer':'default';
 });
-function endDrag(){drag=null;setTimeout(()=>{if(!drag)knife.visible=false;},250);}
+function endDrag(){stopPour();drag=null;setTimeout(()=>{if(!drag)knife.visible=false;},250);}
 el.addEventListener('pointerup',endDrag);el.addEventListener('pointercancel',endDrag);
 
 /* ---------- wrap + reset ---------- */
@@ -373,7 +457,7 @@ function clearFill(){
 }
 function reset(){clearFill();lavash.scale.set(1,1,1);lavash.position.y=lavashY;state=blank();changed();}
 function wrap(done){
-  wrapAnim={t:0,done};
+  stopPour();wrapAnim={t:0,done};if(window.Sfx)Sfx.play('wrap');
   for(const f of flights){f.obj.position.copy(f.to);}flights.length=0;
 }
 
@@ -461,6 +545,7 @@ function frame(){
   requestAnimationFrame(frame);
   const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
   if(!visible)return;
+  updateDrinks(dt);
   for(const sp of spits){
     sp.meat.rotation.y+=dt*0.45;
     const fl=1.25+Math.sin(t*7+sp.g.position.x)*0.08+Math.sin(t*13)*0.05;
@@ -506,8 +591,10 @@ function frame(){
 frame();
 
 window.Kitchen={
-  show(){root.hidden=false;visible=true;resize();},
-  hide(){root.hidden=true;visible=false;},
+  show(){root.hidden=false;visible=true;resize();if(window.Sfx)Sfx.loop('sizzle',true);},
+  hide(){root.hidden=true;visible=false;stopPour();if(window.Sfx)Sfx.loop('sizzle',false);},
+  setOrder(o){order=o;updateHint();},
+  FILL_OK,FILL_MAX,
   reset,wrap,
   get state(){return Object.assign({},state);},
   MEAT_NEED
