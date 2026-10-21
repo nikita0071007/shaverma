@@ -127,9 +127,21 @@ let cookG=null;
 function makeCook(){
   const g=makeGuest({skin:'#E0AC83',shirt:'#f4f4f2',hair:'#2B1D14'});
   const white=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:0.6});
-  const hatBand=mesh(new THREE.CylinderGeometry(0.46,0.46,0.3,20),white);hatBand.position.y=4.75;g.userData.body.add(hatBand);
-  const puff=mesh(new THREE.SphereGeometry(0.58,18,12),white);puff.scale.y=0.7;puff.position.y=5.12;g.userData.body.add(puff);
-  const apron=mesh(new THREE.BoxGeometry(0.95,1.9,0.05),new THREE.MeshStandardMaterial({color:'#3a2a20',roughness:0.8}));apron.position.set(0,2.4,0.37);g.userData.body.add(apron);
+  const B=g.userData.body;
+  const hatBand=mesh(new THREE.CylinderGeometry(0.46,0.46,0.3,20),white);hatBand.position.y=4.75;B.add(hatBand);
+  const puff=mesh(new THREE.SphereGeometry(0.58,18,12),white);puff.scale.y=0.7;puff.position.y=5.12;B.add(puff);
+  const apronMat=new THREE.MeshStandardMaterial({color:'#3a2a20',roughness:0.8});
+  const apron=mesh(new THREE.BoxGeometry(0.95,1.9,0.05),apronMat);apron.position.set(0,2.4,0.37);B.add(apron);
+  /* optional looks from the crystal shop */
+  const bandana=mesh(new THREE.SphereGeometry(0.49,18,10,0,Math.PI*2,0,Math.PI*0.5),new THREE.MeshStandardMaterial({color:'#c8321e',roughness:0.8}));bandana.position.y=4.5;B.add(bandana);
+  const capMat=new THREE.MeshStandardMaterial({color:'#1f3a6b',roughness:0.7});
+  const cap=new THREE.Group();cap.position.y=4.55;B.add(cap);
+  cap.add(mesh(new THREE.SphereGeometry(0.49,18,10,0,Math.PI*2,0,Math.PI*0.5),capMat));
+  const visor=mesh(new THREE.BoxGeometry(0.6,0.05,0.4),capMat);visor.position.set(0,0.02,0.5);cap.add(visor);
+  const beard=mesh(new THREE.SphereGeometry(0.36,14,10),g.userData.mats.hair);beard.scale.set(1,0.9,0.7);beard.position.set(0,4.12,0.22);B.add(beard);
+  const mustache=mesh(new THREE.BoxGeometry(0.34,0.07,0.08),g.userData.mats.hair);mustache.position.set(0,4.3,0.42);B.add(mustache);
+  const longHair=mesh(new THREE.CapsuleGeometry(0.36,0.7,4,10),g.userData.mats.hair);longHair.position.set(0,4.0,-0.25);B.add(longHair);
+  g.userData.look={hatBand,puff,apronMat,bandana,cap,beard,mustache,longHair};
   g.position.set(0.6,FLOOR_Y,3.45);g.rotation.y=Math.PI;scene.add(g);
   return g;
 }
@@ -147,10 +159,48 @@ function makeGuest(c){
   const head=mesh(new THREE.SphereGeometry(0.44,20,14),skin);head.position.y=4.4;body.add(head);
   const hairM=mesh(new THREE.SphereGeometry(0.47,20,10,0,Math.PI*2,0,Math.PI*0.55),hair);hairM.position.y=4.47;hairM.rotation.x=-0.25;body.add(hairM);
   const eyeM=mat('#1d140e');for(const x of [-0.15,0.15]){const e=mesh(new THREE.SphereGeometry(0.05,8,6),eyeM);e.position.set(x,4.45,0.4);body.add(e);}
-  g.userData={legL,legR,armL,armR,body,phase:Math.random()*6};
+  g.userData={legL,legR,armL,armR,body,head,hairM,mats:{skin,shirt,pants,hair},phase:Math.random()*6};
   return g;
 }
 cookG=makeCook();
+
+const OUTFITS={white:['#f4f4f2','#3a2a20'],black:['#232323','#8a1c1c'],red:['#c8321e','#1d1d1d'],khaki:['#5b6b3a','#2f3320'],denim:['#3d5a80','#a0522d'],gold:['#d4a537','#5a3a10']};
+const LOOKS={misha:{skin:'#E0AC83',hair:'#2B1D14'},beard:{skin:'#E0AC83',hair:'#5A3A22',beard:1},mustache:{skin:'#D9A47C',hair:'#2B1D14',mustache:1},bald:{skin:'#C58C63',hair:'#2B1D14',bald:1},girl:{skin:'#F2C9A0',hair:'#B5651D',long:1}};
+function applyCook(eq){
+  const u=cookG.userData,L=u.look,o=OUTFITS[eq.outfit]||OUTFITS.white,lk=LOOKS[eq.look]||LOOKS.misha;
+  u.mats.shirt.color.set(o[0]);u.mats.shirt.metalness=eq.outfit==='gold'?0.55:0;u.mats.shirt.roughness=eq.outfit==='gold'?0.35:0.75;
+  L.apronMat.color.set(o[1]);
+  u.mats.skin.color.set(lk.skin);u.mats.hair.color.set(lk.hair);
+  u.hairM.visible=!lk.bald;L.beard.visible=!!lk.beard;L.mustache.visible=!!lk.mustache;L.longHair.visible=!!lk.long;
+  L.hatBand.visible=L.puff.visible=eq.hat==='chef';L.bandana.visible=eq.hat==='bandana';L.cap.visible=eq.hat==='cap';
+}
+/* the theme swaps the dining-room walls */
+const THEMES={brick:['brick_wall_001',new THREE.Vector2(7,6),'#f1e3d3',0],wood:['kitchen_wood',new THREE.Vector2(6,5),'#ffffff',0],white:['long_white_tiles',new THREE.Vector2(6,8),'#ffffff',Math.PI/2]};
+let themeNow='brick';
+function applyTheme(id){
+  if(id===themeNow||!THEMES[id])return;themeNow=id;const t=THEMES[id];
+  pbr(t[0],t[1],brickMat,t[3]);brickMat.color.set(t[2]);
+}
+/* waiter: white shirt, black vest and bow tie; walks over to whoever has waited longest */
+const waiter=(()=>{
+  const g=makeGuest({skin:'#F2C9A0',shirt:'#ffffff',hair:'#1A1A1A'}),B=g.userData.body,black=new THREE.MeshStandardMaterial({color:'#151515',roughness:0.6});
+  const vest=mesh(new THREE.CapsuleGeometry(0.54,0.8,4,12),black);vest.scale.z=0.7;vest.position.y=2.95;B.add(vest);
+  const bow=mesh(new THREE.BoxGeometry(0.3,0.1,0.06),black);bow.position.set(0,3.85,0.38);B.add(bow);
+  const tray=mesh(new THREE.CylinderGeometry(0.45,0.45,0.04,20),M.steel);tray.position.set(0.75,3.2,0.35);B.add(tray);
+  g.position.set(6,FLOOR_Y,7.6);g.visible=false;crowd.add(g);return g;
+})();
+/* the cafe cat, curled up asleep by the counter */
+const cat=(()=>{
+  const g=new THREE.Group(),fur=new THREE.MeshStandardMaterial({color:'#e08a3c',roughness:0.9}),white=new THREE.MeshStandardMaterial({color:'#f6efe6',roughness:0.9});
+  const body=mesh(new THREE.SphereGeometry(0.55,16,12),fur);body.scale.set(1.3,0.6,0.9);body.position.y=0.32;g.add(body);
+  const head=mesh(new THREE.SphereGeometry(0.32,16,12),fur);head.position.set(0.62,0.38,0.2);g.add(head);
+  const muzzle=mesh(new THREE.SphereGeometry(0.14,10,8),white);muzzle.position.set(0.85,0.32,0.25);g.add(muzzle);
+  for(const z of [0.05,0.35]){const e=mesh(new THREE.ConeGeometry(0.1,0.22,4),fur);e.position.set(0.6,0.66,z);g.add(e);}
+  const tail=new THREE.Group();tail.position.set(-0.65,0.25,0);g.add(tail);
+  const t1=mesh(new THREE.CapsuleGeometry(0.08,0.7,4,8),fur);t1.rotation.z=Math.PI/2;t1.position.set(-0.3,0,0.25);t1.rotation.y=0.6;tail.add(t1);
+  g.userData.tail=tail;g.position.set(-6.2,FLOOR_Y,7.6);g.rotation.y=-0.4;g.visible=false;crowd.add(g);return g;
+})();
+let lookKey='';
 
 /* couriers use the Meshy model (white mesh, tinted courier-yellow) when it is available */
 let courierModel=null;
@@ -225,6 +275,21 @@ hooks.push((dt,t)=>{
   const Game=window.Game;if(!Game)return;
   const G=Game.G,K=window.Kitchen,inHall=K&&K.view==='hall';
   layer.hidden=!inHall;
+  /* shop purchases: cook's look, staff, pet, theme */
+  const eq=G.equip||{};
+  const key=JSON.stringify([eq.outfit,eq.hat,eq.look]);if(key!==lookKey){lookKey=key;applyCook(eq);}
+  applyTheme(eq.theme||'brick');
+  cat.visible=!!eq.cat;if(cat.visible)cat.userData.tail.rotation.y=Math.sin(t*1.5)*0.35;
+  waiter.visible=!!eq.waiter;
+  if(waiter.visible){
+    const wc=G.cust.filter(c=>c.state==='wait'&&!c.courier).sort((a,b)=>a.patience-b.patience)[0];
+    const tx=wc?tables[wc.table].position.x+0.9:6,tz=wc?tables[wc.table].position.z+1.4:7.6;
+    const dx=tx-waiter.position.x,dz=tz-waiter.position.z,d=Math.hypot(dx,dz),u=waiter.userData,walking=d>0.1;
+    if(walking){const k=Math.min(d,dt*3.5)/d;waiter.position.x+=dx*k;waiter.position.z+=dz*k;waiter.rotation.y=Math.atan2(dx,dz);}
+    else waiter.rotation.y=wc?-Math.PI/2+0.3:Math.PI;
+    u.phase+=dt*(walking?9:0);const sw=walking?Math.sin(u.phase)*0.55:0;
+    u.legL.rotation.x=sw;u.legR.rotation.x=-sw;u.armL.rotation.x=-sw*0.8;u.armR.rotation.x=-1.2;
+  }
   /* in the kitchen view the player is the cook: hide the cook and the dining room so nothing blocks the counter */
   const working=K&&K.view==='kitchen'&&K.progress>0.6;
   crowd.visible=!working;cookG.visible=!working;

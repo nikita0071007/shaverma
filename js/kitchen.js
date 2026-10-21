@@ -335,6 +335,7 @@ function makeJug(key,x,z){
   g.add(body);
   const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.75,0.19),new THREE.MeshBasicMaterial({map:labelTex(DRINKS[key].name,'#2b1d14','#f6e7c8')}));
   lbl.rotation.x=-Math.PI/2;lbl.position.set(x,0.01,z+0.6);scene.add(lbl);   /* stays on the counter while the jug pours */
+  g.userData.spout=key==='tea'?new THREE.Vector3(0.68,0.64,0):key==='ayran'?new THREE.Vector3(0.47,1.09,0):new THREE.Vector3(0,1.4,0);
   g.userData.act={type:'drink',key};targets.push(g);scene.add(g);jugs[key]=g;
 }
 makeJug('tea',-4.75,1.3);makeJug('ayran',-3.85,1.3);makeJug('cola',-3.0,1.3);
@@ -350,18 +351,25 @@ function stopPour(){
   pouring=null;stream.visible=false;if(window.Sfx)Sfx.loop('pour',false);changed();
 }
 function emptyGlass(){state.drink=null;state.fill=0;if(window.Sfx)Sfx.play('click');changed();}
+const SPOUT_Y=2.5;   /* jugs are lifted so the spout sits this high, right above the glass */
+const _sp=new THREE.Vector3();
 function updateDrinks(dt){
-  const target=new THREE.Vector3(glass.position.x-0.6,1.15,glass.position.z);
   for(const k in jugs){
     const j=jugs[k],on=!!(pouring&&pouring.key===k);
-    j.userData.p=THREE.MathUtils.clamp(j.userData.p+(on?dt:-dt)*4,0,1);
-    const p=j.userData.p;j.position.lerpVectors(j.userData.home,target,p);j.rotation.z=-1.25*p;
+    j.userData.p=THREE.MathUtils.clamp(j.userData.p+(on?dt:-dt)*3.5,0,1);
+    const p=j.userData.p,e=p*p*(3-2*p);
+    j.position.copy(j.userData.home);j.rotation.z=-1.9*e;
+    if(p>0){
+      /* move the tilted jug so its spout ends up over the middle of the glass, up high */
+      j.updateMatrixWorld();_sp.copy(j.userData.spout);j.localToWorld(_sp);
+      j.position.x+=(glass.position.x-_sp.x)*e;j.position.z+=(glass.position.z-_sp.z)*e;j.position.y+=(SPOUT_Y-_sp.y)*e;
+    }
   }
-  if(pouring&&jugs[pouring.key].userData.p>0.9){
+  if(pouring&&jugs[pouring.key].userData.p>0.95){
     state.fill+=dt*0.3*perks.pour;
-    const top=0.05+Math.min(state.fill,1)*(GLASS_H-0.1),y0=1.45;
+    const top=0.05+Math.min(state.fill,1)*(GLASS_H-0.1),y0=SPOUT_Y;
     stream.visible=true;stream.scale.y=Math.max(0.01,y0-top);
-    stream.position.set(glass.position.x-0.05,(y0+top)/2,glass.position.z);
+    stream.position.set(glass.position.x,(y0+top)/2,glass.position.z);
     if(window.Sfx)Sfx.pourLevel(Math.min(state.fill,1));
     pourTick+=dt;if(pourTick>0.12){pourTick=0;changed();}
   }else stream.visible=false;
@@ -426,7 +434,7 @@ function updateHint(){
     hint.textContent=order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK)?'Пока жарится, налейте '+DRINKS[order.drink].name.toLowerCase():
       (state.toast<TOAST_OK?'Жарим… ждём, пока станет золотистой':state.toast<=TOAST_MAX?'Золотистая! Нажмите «Подать»':state.toast<=TOAST_BURNT?'Подгорает! Скорее подавайте':'Сгорела… можно подать, но гость будет недоволен');return;
   }
-  if(!state.meatN)t='Проведите по вертелу, чтобы срезать мясо';
+  if(!state.meatN)t='Ведите пальцем вверх-вниз по вертелу — нож срежет мясо';
   else if(state.meatN<MEAT_NEED)t='Срежьте ещё '+(MEAT_NEED-state.meatN);
   else if(!state.tomato||!state.cucumber)t='Добавьте помидоры и огурцы';
   else if(!state.sauce)t='Лук, если просили, и соус';
@@ -451,17 +459,23 @@ const stripGeo=(()=>{
   for(let i=0;i<p.count;i++){const x=p.getX(i);p.setZ(i,-x*x*1.6);}
   g.computeVertexNormals();return g;
 })();
-function shave(sp,point){
+let slivers=0;
+/* one thin strip of meat leaves the knife and lands on the lavash */
+function sliver(sp){
+  if(state.meatN>=MEAT_MAX||slivers>60)return;
+  slivers++;
+  const s=mesh(stripGeo,meatMat[sp.kind+'Strip']);
+  s.rotation.set(-Math.PI/2+rnd(-0.3,0.3),rnd(0,6.28),rnd(-0.2,0.2));s.scale.setScalar(rnd(0.7,1.05));
+  fly(s,knife.position.clone().add(new THREE.Vector3(-0.3,0,0)),spot(0.75,0.3,0.05+slivers*0.004),0.5,1.0);
+  if(window.Sfx)Sfx.play('sliver');
+}
+/* every so often the slivers add up to a counted portion */
+function portion(sp){
   if(state.meatN>=MEAT_MAX){hint.textContent='Мяса уже достаточно';return;}
   state.meatN=Math.min(MEAT_MAX,state.meatN+perks.knife);cook.x=sp.g.position.x;
-  if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
   state.meat=!state.meat||state.meat===sp.kind?sp.kind:'mixed';
+  if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
   sp.shrink=Math.max(0.86,sp.shrink-0.006);sp.meat.scale.set(sp.shrink,1,sp.shrink);
-  for(let i=0;i<3*perks.knife;i++){
-    const s=mesh(stripGeo,meatMat[sp.kind+'Strip']);
-    s.rotation.set(-Math.PI/2+rnd(-0.3,0.3),rnd(0,6.28),rnd(-0.2,0.2));
-    fly(s,point,spot(0.75,0.3,0.05+state.meatN*0.012),0.55+i*0.08,1.2);
-  }
   changed();
 }
 function addVeg(kind){
@@ -495,10 +509,17 @@ function pick(e){
   let o=hit.object;while(o&&!o.userData.act)o=o.parent;
   return o?{act:o.userData.act,point:hit.point}:null;
 }
+const knifeTarget=new THREE.Vector3();
+/* the knife glides on the front of the cone at the finger's height */
 function moveKnife(e,sp){
   knifePlane.constant=-(sp.g.position.z+0.95);
   const p=new THREE.Vector3();
-  if(ray.ray.intersectPlane(knifePlane,p)){knife.position.copy(p);knife.rotation.set(0,-0.5,-0.35);knife.visible=true;}
+  if(ray.ray.intersectPlane(knifePlane,p)){
+    const y=THREE.MathUtils.clamp(p.y,0.6,3.4),t=(y-0.36)/3.1,r=(0.52+0.32*Math.pow(Math.max(t,0),1.3))*sp.shrink;
+    knifeTarget.set(sp.g.position.x+0.35,y,sp.g.position.z+r+0.12);
+    if(!knife.visible){knife.position.copy(knifeTarget);knife.visible=true;}
+    knife.rotation.set(0,0.35,-0.12);
+  }
 }
 const el=renderer.domElement;
 el.addEventListener('pointerdown',e=>{
@@ -506,8 +527,8 @@ el.addEventListener('pointerdown',e=>{
   const h=pick(e);if(!h)return;
   if(h.act.type==='meat'){
     const sp=spits.find(s=>s.kind===h.act.kind);
-    drag={sp,x:e.clientX,y:e.clientY,acc:0};el.setPointerCapture(e.pointerId);
-    moveKnife(e,sp);shave(sp,h.point);
+    drag={sp,x:e.clientX,y:e.clientY,acc:0,sliver:0};el.setPointerCapture(e.pointerId);
+    moveKnife(e,sp);sliver(sp);
   }else if(h.act.type==='veg')addVeg(h.act.kind);
   else if(h.act.type==='sauce')addSauce(h.act.key);
   else if(h.act.type==='drink'){startPour(h.act.key);el.setPointerCapture(e.pointerId);}
@@ -516,14 +537,12 @@ el.addEventListener('pointerdown',e=>{
 });
 el.addEventListener('pointermove',e=>{
   if(drag){
-    drag.acc+=Math.hypot(e.clientX-drag.x,e.clientY-drag.y);drag.x=e.clientX;drag.y=e.clientY;
+    const d=Math.hypot(e.clientX-drag.x,e.clientY-drag.y);drag.x=e.clientX;drag.y=e.clientY;
+    drag.acc+=d;drag.sliver+=d;
     pick(e);moveKnife(e,drag.sp);
-    while(drag.acc>=60){
-      drag.acc-=60;
-      const p=new THREE.Vector3();ray.ray.intersectPlane(knifePlane,p);
-      p.set(drag.sp.g.position.x,THREE.MathUtils.clamp(p.y,0.6,3.4),drag.sp.g.position.z+0.7);
-      shave(drag.sp,p);
-    }
+    /* a thin sliver every few pixels of knife travel, a full portion every ~55px */
+    while(drag.sliver>=16){drag.sliver-=16;sliver(drag.sp);}
+    while(drag.acc>=55){drag.acc-=55;portion(drag.sp);}
     return;
   }
   if(view==='kitchen')el.style.cursor=pick(e)?'pointer':'default';
@@ -534,7 +553,7 @@ el.addEventListener('pointerup',endDrag);el.addEventListener('pointercancel',end
 /* ---------- wrap + reset ---------- */
 let wrapAnim=null;
 function clearFill(){
-  flights.length=0;sauceAnims.length=0;
+  flights.length=0;sauceAnims.length=0;slivers=0;
   for(const c of [...fill.children]){fill.remove(c);if(c.geometry&&c.geometry.type==='TubeGeometry')c.geometry.dispose();}
 }
 function reset(){
@@ -672,6 +691,7 @@ function frame(){
   if(camT<1){camT=Math.min(1,camT+dt/0.8);const e=camT<0.5?2*camT*camT:1-Math.pow(-2*camT+2,2)/2;applyCam(e);}
   for(const h of hooks)h(dt,t);
   updateDrinks(dt);
+  if(knife.visible)knife.position.lerp(knifeTarget,Math.min(1,dt*20));
   for(const sp of spits){
     sp.meat.rotation.y+=dt*0.45;
     const fl=1.25+Math.sin(t*7+sp.g.position.x)*0.08+Math.sin(t*13)*0.05;

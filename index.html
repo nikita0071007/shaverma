@@ -94,7 +94,9 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 @media (min-width:1000px){
   .wrap{max-width:clamp(940px,calc((100vh - 176px)*1.6 + 354px),1280px)}
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-  .hud{flex:0 1 640px}
+  .hud{flex:0 1 780px;flex-wrap:nowrap}
+  .hud .stat{min-width:0;padding:8px 12px}
+  .hud .timebox{min-width:140px}
   .main{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
   .main .panel{margin-top:44px}
 }
@@ -173,6 +175,20 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .tk .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:14px!important}
 @media (max-width:700px){.rail{top:46px}}
 .flt{position:absolute;left:0;top:0;font-weight:700;font-size:15px;white-space:nowrap;text-shadow:0 1px 0 #1a120c,0 0 6px rgba(0,0,0,.7)}
+.gems{cursor:pointer;color:var(--cream);text-align:left}
+.gems .v{font-size:16px}
+.devtag{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:#3ad6ff;color:#062a33;font:700 11px var(--font-body);vertical-align:middle}
+.shop{z-index:6}
+.shop .tabsrow{display:flex;gap:6px;flex-wrap:wrap}
+.shop .tabsrow button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-weight:600;font-size:13px}
+.shop .tabsrow button[aria-pressed="true"]{background:var(--turmeric);color:#2B1A0A;border-color:var(--turmeric)}
+.shop .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.shop .item{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;background:rgba(43,32,25,.7)}
+.shop .item .sw{height:34px;border-radius:6px;border:1px solid rgba(0,0,0,.4)}
+.shop .item b{font-size:14px}
+.shop .item span{font-size:12px;color:var(--muted)}
+.shop .item.on{border-color:var(--pistachio);box-shadow:0 0 0 2px rgba(143,179,57,.35)}
+.shop .head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .mute{font-size:18px;line-height:1;cursor:pointer;color:var(--cream);min-width:0;padding:8px 12px}
 .mute[aria-pressed="true"]{opacity:.55}
 .overlay p.credits{color:var(--muted);font-size:12px;margin-top:auto}
@@ -192,6 +208,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
     <div class="stat"><span class="k">День</span><span class="v" id="hDay">1</span></div>
     <div class="stat"><span class="k">Деньги</span><span class="v" id="hMoney">0 ₽</span></div>
     <div class="stat"><span class="k">Репутация</span><span class="v" id="hRep">3.0 ★</span></div>
+    <button class="stat gems" id="shopBtn" aria-label="Магазин"><span class="k">Магазин</span><span class="v" id="hGems">💎 0</span></button>
     <button class="stat mute" id="mute" aria-label="Звук">🔊</button>
     <div class="timebox"><span class="k"><span>До закрытия</span><span id="hLeft">—</span></span><div class="bar"><i id="hTime"></i></div></div>
   </div>
@@ -208,6 +225,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
     <div class="kitchen" id="kitchen" hidden aria-label="Кухня: вертела, лаваш, овощи и соусы"></div>
     <div class="coach" id="coach" hidden><p id="coachText"></p><button type="button" class="btn" id="coachSkip">Пропустить обучение</button></div>
     <div class="overlay" id="ov"></div>
+    <div class="overlay shop" id="shop" hidden></div>
   </div>
   </div>
 
@@ -256,13 +274,15 @@ function K(){return window.Kitchen;}
 var anim=0;
 
 function newGame(){
-  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
+  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},gems:20,dev:false,
+    owned:{outfit_white:1,hat_chef:1,hat_none:1,look_misha:1,theme_brick:1},equip:{outfit:'white',hat:'chef',look:'misha',theme:'brick',waiter:false,cat:false},time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
 }
 /* ---------- save ---------- */
 /* Progress is saved between days: a reload mid-day restarts that day with the money it opened with. */
 var SAVE_KEY='shaverma-save-v1';
 function save(){
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT}));}catch(e){}
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT,
+    gems:G.gems,dev:G.dev,owned:G.owned,equip:G.equip}));}catch(e){}
 }
 function loadSave(){
   try{var s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.v===1)return s;}catch(e){}
@@ -274,6 +294,10 @@ function applySave(s){
   G.tables=clamp(s.tables|0,3,6);G.comfort=clamp(s.comfort|0,0,3);G.sign=clamp(s.sign|0,0,3);
   if(typeof s.courierT==='number')G.courierT=clamp(s.courierT,0,COURIER_EVERY);
   if(s.perks)for(var k in G.perks)G.perks[k]=s.perks[k]?1:0;
+  if(typeof s.gems==='number')G.gems=Math.max(0,s.gems|0);
+  G.dev=!!s.dev;
+  if(s.owned)for(var o in s.owned)G.owned[o]=1;
+  if(s.equip)for(var q in G.equip)if(q in s.equip)G.equip[q]=s.equip[q];
 }
 /* kitchen perks bought in the shop change how the 3D kitchen behaves */
 function syncPerks(){if(K())K().setPerks({knife:G.perks.knife?2:1,grill:G.perks.grill?1.4:1,pour:G.perks.pour?2:1});}
@@ -287,7 +311,64 @@ function hud(){
   document.getElementById('hDay').textContent=G.day;
   document.getElementById('hMoney').textContent=fmt(G.money);
   document.getElementById('hRep').textContent=G.rep.toFixed(1)+' ★';
+  document.getElementById('hGems').textContent=G.dev?'💎 ∞':'💎 '+G.gems;
+  document.getElementById('hMoney').innerHTML=fmt(G.money)+(G.dev?'<span class="devtag">DEV</span>':'');
 }
+/* ---------- crystal shop: looks for the cook, staff, a pet and interior themes ---------- */
+var SHOP={
+  outfit:{title:'Форма повара',items:[
+    {id:'white',name:'Классика',price:0,sw:'linear-gradient(90deg,#f4f4f2 60%,#3a2a20 0)'},
+    {id:'black',name:'Чёрный шеф',price:50,sw:'linear-gradient(90deg,#232323 60%,#8a1c1c 0)'},
+    {id:'red',name:'Огненный',price:80,sw:'linear-gradient(90deg,#c8321e 60%,#1d1d1d 0)'},
+    {id:'khaki',name:'Хаки',price:120,sw:'linear-gradient(90deg,#5b6b3a 60%,#2f3320 0)'},
+    {id:'denim',name:'Джинса',price:120,sw:'linear-gradient(90deg,#3d5a80 60%,#a0522d 0)'},
+    {id:'gold',name:'Золотой шеф',price:300,sw:'linear-gradient(90deg,#d4a537 60%,#5a3a10 0)'}]},
+  hat:{title:'Головной убор',items:[
+    {id:'chef',name:'Колпак',price:0,sw:'#ffffff'},{id:'bandana',name:'Бандана',price:40,sw:'#c8321e'},
+    {id:'cap',name:'Кепка',price:40,sw:'#1f3a6b'},{id:'none',name:'Без шапки',price:0,sw:'#555'}]},
+  look:{title:'Внешность повара',items:[
+    {id:'misha',name:'Повар Миша',price:0,sw:'#E0AC83'},{id:'beard',name:'Бородач',price:60,sw:'#5A3A22'},
+    {id:'mustache',name:'Усач',price:60,sw:'#2B1D14'},{id:'bald',name:'Лысый',price:60,sw:'#C58C63'},
+    {id:'girl',name:'Повар Аня',price:100,sw:'#B5651D'}]},
+  staff:{title:'Персонал и питомцы',items:[
+    {id:'waiter',name:'Официант',price:200,desc:'Ходит по залу, гости ждут на 25% дольше',sw:'linear-gradient(90deg,#ffffff 50%,#111 0)',toggle:true},
+    {id:'cat',name:'Кот Шаурмен',price:150,desc:'Спит в зале, гостям нравится',sw:'#e08a3c',toggle:true}]},
+  theme:{title:'Интерьер',items:[
+    {id:'brick',name:'Кирпич',price:0,sw:'#9c4a32'},{id:'wood',name:'Дерево',price:100,sw:'#b07a45'},{id:'white',name:'Белая плитка',price:100,sw:'#e9e4da'}]}
+};
+var shopTab='outfit',shopEl=document.getElementById('shop');
+function owned(cat,id){return !!G.owned[cat+'_'+id];}
+function equipped(cat,id){return SHOP[cat].items.some(function(i){return i.toggle;})?!!G.equip[id]:G.equip[cat]===id;}
+function openShop(){G.paused=true;renderShop();shopEl.hidden=false;sfx('click');}
+function closeShop(){shopEl.hidden=true;G.paused=false;save();}
+function renderShop(){
+  var cat=SHOP[shopTab],h='<div class="head"><h2>Магазин</h2><span>'+(G.dev?'💎 ∞ (разработчик)':'💎 '+G.gems)+'</span></div>'+
+    '<div class="tabsrow">'+Object.keys(SHOP).map(function(k){return '<button data-tab="'+k+'" aria-pressed="'+(k===shopTab)+'">'+SHOP[k].title+'</button>';}).join('')+'</div>'+
+    '<div class="items">'+cat.items.map(function(it){
+      var have=owned(shopTab,it.id)||it.price===0,on=equipped(shopTab,it.id);
+      return '<div class="item'+(on?' on':'')+'"><div class="sw" style="background:'+it.sw+'"></div><b>'+it.name+'</b>'+(it.desc?'<span>'+it.desc+'</span>':'')+
+        '<button class="btn'+(have?'':' primary')+'" data-buy="'+it.id+'">'+(have?(on?(it.toggle?'Убрать':'Надето'):(it.toggle?'Включить':'Надеть')):'💎 '+it.price)+'</button></div>';
+    }).join('')+'</div><p id="shopNote" style="color:var(--muted);min-height:18px"></p><button class="btn go" id="shopClose">Готово</button>';
+  shopEl.innerHTML=h;
+  shopEl.querySelectorAll('[data-tab]').forEach(function(b){b.onclick=function(){shopTab=b.dataset.tab;renderShop();};});
+  shopEl.querySelectorAll('[data-buy]').forEach(function(b){b.onclick=function(){
+    var it=cat.items.filter(function(i){return i.id===b.dataset.buy;})[0];
+    if(!(owned(shopTab,it.id)||it.price===0)){
+      if(!G.dev&&G.gems<it.price){document.getElementById('shopNote').textContent='Не хватает '+(it.price-G.gems)+' 💎.';return;}
+      if(!G.dev)G.gems-=it.price;G.owned[shopTab+'_'+it.id]=1;sfx('buy');
+    }
+    if(it.toggle)G.equip[it.id]=!G.equip[it.id];else G.equip[shopTab]=it.id;
+    hud();renderShop();save();
+  };});
+  document.getElementById('shopClose').onclick=closeShop;
+}
+document.getElementById('shopBtn').onclick=openShop;
+
+/* developer mode: endless money and crystals so every feature can be tried right away */
+var DEV_MONEY=2000000;
+function devTopUp(){if(G.dev){if(G.money<DEV_MONEY/2)G.money=DEV_MONEY;G.gems=999999;}}
+function setDev(on){G.dev=on;if(on){G.money=Math.max(G.money,DEV_MONEY);}devTopUp();hud();save();}
+
 function msg(t){document.getElementById('msg').textContent=t;}
 
 /* ---------- overlay ---------- */
@@ -300,7 +381,8 @@ function showIntro(){
     showOv('<h2>С возвращением!</h2>'+
       '<p>Шаверма ждёт. Прогресс сохранён.</p>'+
       '<div class="facts"><span>День: <b>'+G.day+'</b></span><span>В кассе: <b>'+fmt(G.money)+'</b></span><span>Репутация: <b>'+G.rep.toFixed(1)+' ★</b></span><span>Столиков: <b>'+G.tables+'</b></span></div>'+
-      '<div class="ovbtns"><button class="btn go" id="start">Открыть день '+G.day+'</button><button class="btn" id="wipe">Начать заново</button></div>');
+      '<div class="ovbtns"><button class="btn go" id="start">Открыть день '+G.day+'</button><button class="btn" id="wipe">Начать заново</button><button class="btn" id="devBtn">'+(G.dev?'🛠 Разработчик: вкл':'🛠 Режим разработчика')+'</button></div>');
+    document.getElementById('devBtn').onclick=function(){setDev(!G.dev);showIntro();};
     document.getElementById('start').onclick=startDay;
     var wipe=document.getElementById('wipe');
     wipe.onclick=function(){
@@ -312,9 +394,10 @@ function showIntro(){
   showOv('<h2>Открываем шаверму</h2>'+
     '<p>Гости заходят, садятся за столики и ждут заказ. Чем быстрее и точнее вы соберёте шаверму, тем больше чаевых и выше репутация.</p>'+
     '<ol><li>Нажмите на гостя с пузырём заказа — откроется кухня. Сверху висят чеки всех заказов, справа видно, что уже готово.</li><li>Проведите по нужному вертелу, чтобы срезать мясо, добавьте помидоры и огурцы, лук — если просили, и полейте соусом.</li><li>Если гость хочет напиток, держите палец на кувшине, пока стакан не наполнится до зелёной черты.</li><li>Нажмите «Завернуть» — шаверма ляжет на гриль. Когда станет золотистой, нажмите «Подать».</li></ol>'+
-    '<button class="btn go" id="start">Открыть день 1</button>'+
+    '<div class="ovbtns"><button class="btn go" id="start">Открыть день 1</button><button class="btn" id="devBtn">'+(G.dev?'🛠 Режим разработчика: вкл':'🛠 Режим разработчика')+'</button></div>'+
     '<p class="credits">3D-модели: Meshy (CC BY 4.0), Poly Haven (CC0)</p>');
   document.getElementById('start').onclick=startDay;
+  document.getElementById('devBtn').onclick=function(){setDev(!G.dev);showIntro();};
 }
 var UPG=[
   {id:'tables',name:'Ещё один столик',desc:'Больше гостей в зале одновременно.',
@@ -332,7 +415,7 @@ function perk(id,name,desc,price){
     cost:function(){return price;},buy:function(){G.perks[id]=1;syncPerks();}};
 }
 function showSummary(){
-  if(G.phase==='play')sfx('dayEnd');
+  if(G.phase==='play'){sfx('dayEnd');G.gems+=3;}
   G.phase='summary';setView('hall');
   save();
   var s=G.stats;
@@ -358,6 +441,7 @@ function showSummary(){
 
 /* ---------- day flow ---------- */
 function startDay(){
+  devTopUp();
   G.phase='play';G.time=0;G.spawnT=1;G.cust=[];G.occ=[];G.sel=null;G.floats=[];G.lastLeft=-1;
   G.stats={served:0,lost:0,earned:0};
   G.tut=G.day===1&&!tutorialDone()?{}:null;
@@ -427,7 +511,7 @@ function tutorialStep(){
   if(view!=='kitchen')return 'Над гостем пузырь с заказом. Нажмите на него — откроется кухня.';
   if(KST.stage==='grill')return KST.toast<(K()?K().TOAST_OK:0.55)?'Шаверма жарится. Ждём, пока станет золотистой…':'Золотистая! Нажмите «Подать».';
   if(KST.meat&&KST.meat!=='chicken')return 'Гость просил курицу. Нажмите «Сбросить» и срежьте с левого вертела.';
-  if(KST.meatN<3)return 'Проведите пальцем по левому вертелу с курицей — нож срежет мясо. Нужно 3 раза.';
+  if(KST.meatN<3)return 'Ведите пальцем вверх-вниз по левому вертелу с курицей — нож будет срезать мясо. Нужно 3 порции.';
   if(!KST.tomato)return 'Нажмите на миску с помидорами.';
   if(!KST.cucumber)return 'Теперь огурцы.';
   if(!KST.onion)return 'Гость просил с луком — нажмите на миску с луком.';
@@ -459,7 +543,7 @@ function float(x,y,text,color){G.floats.push({x:x,y:y,text:text,color:color,t:0}
 
 function update(dt){
   anim+=dt;
-  if(G.phase!=='play')return;
+  if(G.phase!=='play'||G.paused)return;
   if(G.tut){coach(tutorialStep());G.cust.forEach(function(c){c.patience=c.maxP;});}   /* nobody leaves and the clock stops while learning */
   else G.time+=dt;
   var len=dayLen();
@@ -475,7 +559,7 @@ function update(dt){
         say(c.courier?'Привет, Мчим Еда! Сейчас соберу заказ.':HELLO[Math.floor(Math.random()*HELLO.length)]);if(!G.sel){G.sel=c;updateTicket();}}
     }else if(c.state==='wait'){
       if(c.courier)c.bagOpen=Math.min(1,c.bagOpen+dt*2.5);
-      c.patience-=dt;
+      c.patience-=dt*(G.equip.waiter?0.75:1);   /* a waiter keeps guests company */
       if(c.patience<=0){
         G.rep=clamp(G.rep-0.3,1,5);G.stats.lost++;
         float(c.x,c.y-60,'Ушёл недовольным','#FF8A6B');sfx('bad');
@@ -619,7 +703,8 @@ document.getElementById('serve').onclick=function(){
     msg('Ошибка: '+bad.join(', ')+'. Гость недоволен, оплата ниже.');sfx('bad');
   }else{
     G.rep=clamp(G.rep+0.1,1,5);
-    msg((crisp?'Идеально, хрустящая! ':'Идеально! ')+'Чаевые: '+tip+' ₽.');sfx('perfect');
+    G.gems+=1;
+    msg((crisp?'Идеально, хрустящая! ':'Идеально! ')+'Чаевые: '+tip+' ₽, +1 💎');sfx('perfect');
     say(c.courier?'Готово, забирайте!':'Приятного аппетита!');
   }
   if(G.tut)endTutorial(true);
@@ -797,6 +882,7 @@ function frame(now){
 }
 newGame();
 var saved=loadSave();if(saved)applySave(saved);
+if(/[?&]dev\b/.test(location.search)){G.dev=true;devTopUp();}
 hud();renderBuild();showIntro();
 requestAnimationFrame(frame);
 })();

@@ -32,6 +32,7 @@ function noise(t,dur,filter,f1,f2,vol,q){
 }
 
 var SOUNDS={
+  sliver:function(t){noise(t,0.05,'bandpass',4200+Math.random()*1500,2500,0.12,4);},
   shave:function(t){noise(t,0.13,'bandpass',5200,1400,0.5,3);noise(t+0.03,0.25,'highpass',3000,0,0.12);},
   drop:function(t){tone(190,t,0.12,'sine',0.35,70);noise(t,0.06,'lowpass',900,0,0.15);},
   squeeze:function(t){
