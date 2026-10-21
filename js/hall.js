@@ -158,20 +158,31 @@ function makeCourier(c){
 /* ---------- bubbles & floating text (DOM, so they stay crisp) ---------- */
 const layer=document.createElement('div');layer.className='bubbles';root.appendChild(layer);
 const DRINK_C={tea:'#9A4A1C',ayran:'#F3EFE4',cola:'#2A0F06'},MEAT_C={chicken:'#E6B04F',beef:'#8A3B22'},SAUCE_C={garlic:'#FFF1CF',spicy:'#D8432B',cheese:'#F2C23B'};
-function bubbleFor(c){
-  const b=document.createElement('button');b.className='bub';b.type='button';
-  const o=c.order;
-  b.innerHTML='<span class="pt"><i></i></span><span class="ic">'+
+function icons(o){
+  return '<span class="ic">'+
     '<i class="dot" style="background:'+MEAT_C[o.meat]+'"></i>'+
     '<i class="sq" style="background:'+SAUCE_C[o.sauce]+'"></i>'+
     '<i class="ring'+(o.onion?'':' no')+'"></i>'+
     (o.drink?'<i class="cup" style="background:'+DRINK_C[o.drink]+'"></i>':'')+
     '</span>';
+}
+function bubbleFor(c){
+  const b=document.createElement('button');b.className='bub';b.type='button';
+  b.innerHTML='<span class="pt"><i></i></span>'+icons(c.order);
   b.setAttribute('aria-label',(c.courier?'Курьер':'Гость')+': открыть заказ');
   b.onclick=()=>{if(window.Game)window.Game.select(c);};
   layer.appendChild(b);return b;
 }
 const floats=new Map();
+/* kitchen order rail: a paper ticket per waiting guest, like the rail above a real kitchen pass */
+const rail=document.createElement('div');rail.className='rail';root.appendChild(rail);
+const tickets=new Map();
+function ticketFor(c){
+  const b=document.createElement('button');b.type='button';b.className='tk';
+  b.innerHTML='<b>'+(c.courier?'Мчим':'Стол '+(c.table+1))+'</b>'+icons(c.order)+'<span class="pt"><i></i></span>';
+  b.onclick=()=>{if(window.Game)window.Game.select(c);};
+  return b;
+}
 
 /* ---------- per-frame sync with the game ---------- */
 const actors=new Map();
@@ -187,7 +198,7 @@ hooks.push((dt,t)=>{
   const G=Game.G,K=window.Kitchen,inHall=K&&K.view==='hall';
   layer.hidden=!inHall;
   /* in the kitchen view the player is the cook: hide the cook and the dining room so nothing blocks the counter */
-  const working=K&&K.view==='kitchen'&&K.settled;
+  const working=K&&K.view==='kitchen'&&K.progress>0.6;
   crowd.visible=!working;cookG.visible=!working;
   {
     const u=cookG.userData,dx=cook.x-cookG.position.x,step=Math.sign(dx)*Math.min(Math.abs(dx),dt*5);
@@ -248,6 +259,16 @@ hooks.push((dt,t)=>{
       const bar=a.bub.firstChild.firstChild;bar.style.width=(r*100)+'%';bar.style.background=r>.5?'#8FB339':r>.25?'#F2A93B':'#D8432B';
     }else if(a.bub){a.bub.remove();a.bub=null;}
   }
+  /* order rail (kitchen view only), most impatient first */
+  rail.hidden=!(K&&K.view==='kitchen');
+  const waiting=G.cust.filter(c=>c.state==='wait').sort((a,b)=>a.patience-b.patience);
+  for(const [c,el] of tickets)if(!waiting.includes(c)){el.remove();tickets.delete(c);}
+  waiting.forEach((c,i)=>{
+    let el=tickets.get(c);if(!el){el=ticketFor(c);tickets.set(c,el);}
+    if(rail.children[i]!==el)rail.insertBefore(el,rail.children[i]||null);
+    el.classList.toggle('sel',G.sel===c);el.classList.toggle('courier',!!c.courier);
+    const r=c.patience/c.maxP,bar=el.lastChild.firstChild;bar.style.width=(r*100)+'%';bar.style.background=r>.5?'#8FB339':r>.25?'#F2A93B':'#D8432B';
+  });
   for(const [c,a] of actors)if(!seen.has(c)){crowd.remove(a.g);if(a.bub)a.bub.remove();actors.delete(c);if(plates.has(c)){crowd.remove(plates.get(c));plates.delete(c);}}
   /* door */
   doorOpen=THREE.MathUtils.clamp(doorOpen+(nearDoor?dt:-dt)*3,0,1);

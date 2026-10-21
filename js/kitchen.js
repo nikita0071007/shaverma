@@ -246,9 +246,10 @@ function makeBowl(kind,x,z,label){
   g.userData.act={type:'veg',kind};targets.push(g);
   scene.add(g);bowls[kind]=g;
 }
-makeBowl('onion',2.5,-1.5,'ЛУК');
-makeBowl('tomato',3.95,-1.5,'ПОМИДОРЫ');
-makeBowl('cucumber',5.4,-1.5,'ОГУРЦЫ');
+/* vegetables sit in the front row so they are easy to see and reach; sauces stand behind them */
+makeBowl('onion',3.2,0.95,'ЛУК');
+makeBowl('tomato',4.6,0.95,'ПОМИДОРЫ');
+makeBowl('cucumber',6.0,0.95,'ОГУРЦЫ');
 
 /* ---------- sauce bottles ---------- */
 const bottles={};
@@ -262,9 +263,33 @@ function makeBottle(key,x,z){
   g.userData.act={type:'sauce',key};targets.push(g);g.userData.stub=[body,nozzle];g.userData.label=lbl;
   scene.add(g);bottles[key]=g;
 }
-makeBottle('garlic',3.7,1.1);
-makeBottle('spicy',4.5,1.1);
-makeBottle('cheese',5.3,1.1);
+makeBottle('garlic',3.6,-1.75);
+makeBottle('spicy',4.6,-1.75);
+makeBottle('cheese',5.6,-1.75);
+
+/* ---------- contact grill: the wrapped shawarma is pressed here until golden ---------- */
+const grill=new THREE.Group();grill.position.set(1.0,0,-2.05);scene.add(grill);
+const grillLid=new THREE.Group();
+{
+  const base=mesh(new THREE.BoxGeometry(2.4,0.45,1.5),M.steel);base.position.y=0.225;grill.add(base);
+  const ribs=canvasTex(256,128,(g,w,h)=>{g.fillStyle='#2a2a2a';g.fillRect(0,0,w,h);g.fillStyle='#4a4a4a';for(let x=6;x<w;x+=16)g.fillRect(x,0,7,h);});
+  const plate=mesh(new THREE.BoxGeometry(2.1,0.05,1.2),new THREE.MeshStandardMaterial({map:ribs,metalness:0.6,roughness:0.5}));plate.position.y=0.47;grill.add(plate);
+  for(const x of [-0.85,0.85]){const k=mesh(new THREE.CylinderGeometry(0.07,0.07,0.08,12),M.handle);k.rotation.x=Math.PI/2;k.position.set(x,0.22,0.78);grill.add(k);}
+  grillLid.position.set(0,0.5,-0.72);grill.add(grillLid);
+  const lid=mesh(new THREE.BoxGeometry(2.3,0.22,1.45),M.darkSteel);lid.position.set(0,0.11,0.72);grillLid.add(lid);
+  const handle=mesh(new THREE.BoxGeometry(1.8,0.08,0.08),M.handle);handle.position.set(0,0.2,1.5);grillLid.add(handle);
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(1.0,0.25),new THREE.MeshBasicMaterial({map:labelTex('ГРИЛЬ','#2b1d14','#f2a93b')}));
+  lbl.rotation.x=-Math.PI/2;lbl.position.set(0,0.01,1.0);grill.add(lbl);
+}
+grill.userData.act={type:'grill'};targets.push(grill);
+const rollMat=new THREE.MeshStandardMaterial({map:tex.lavash,roughness:0.85});
+const roll=mesh(new THREE.CylinderGeometry(0.3,0.3,1.7,24),rollMat);roll.rotation.z=Math.PI/2;roll.visible=false;scene.add(roll);
+const LAVASH_C=new THREE.Color('#ffffff'),GOLD_C=new THREE.Color('#d8954a'),BURNT_C=new THREE.Color('#3a2414');
+function toastColor(k,out){
+  return k<=0.8?out.copy(LAVASH_C).lerp(GOLD_C,k/0.8):out.copy(GOLD_C).lerp(BURNT_C,Math.min(1,(k-0.8)/0.6));
+}
+const TOAST_OK=0.55,TOAST_MAX=1.0,TOAST_BURNT=1.2;
+function toastLabel(k){return k<TOAST_OK?'бледная':k<=TOAST_MAX?'золотистая':k<=TOAST_BURNT?'подгорает!':'сгорела';}
 
 /* ---------- drinks: hold a jug to pour into the glass; the green ring marks "full enough" ---------- */
 const DRINKS={tea:{name:'ЧАЙ',c:'#9a4a1c',op:0.85},ayran:{name:'АЙРАН',c:'#f3efe4',op:0.97},cola:{name:'КОЛА',c:'#2a0f06',op:0.92}};
@@ -389,19 +414,24 @@ const knife=new THREE.Group();
 knife.visible=false;scene.add(knife);
 
 /* ---------- state ---------- */
-function blank(){return {meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null,drink:null,fill:0};}
+function blank(){return {meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null,drink:null,fill:0,stage:'build',toast:0};}
 let order=null;   /* the selected guest's order, only used for hints */
 let state=blank();
 function changed(){updateHint();if(window.onKitchenChange)window.onKitchenChange(Object.assign({},state));}
 function updateHint(){
   let t;
+  if(state.stage==='rolling'){hint.textContent='Заворачиваем…';return;}
+  if(state.stage==='grill'){
+    hint.textContent=order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK)?'Пока жарится, налейте '+DRINKS[order.drink].name.toLowerCase():
+      (state.toast<TOAST_OK?'Жарим… ждём, пока станет золотистой':state.toast<=TOAST_MAX?'Золотистая! Нажмите «Подать»':state.toast<=TOAST_BURNT?'Подгорает! Скорее подавайте':'Сгорела… можно подать, но гость будет недоволен');return;
+  }
   if(!state.meatN)t='Проведите по вертелу, чтобы срезать мясо';
   else if(state.meatN<MEAT_NEED)t='Срежьте ещё '+(MEAT_NEED-state.meatN);
   else if(!state.tomato||!state.cucumber)t='Добавьте помидоры и огурцы';
   else if(!state.sauce)t='Лук, если просили, и соус';
   else if(state.fill>FILL_MAX)t='Перелили! Нажмите на стакан, чтобы вылить';
   else if(order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK))t='Налейте '+DRINKS[order.drink].name.toLowerCase()+': держите палец на кувшине до зелёной черты';
-  else t='Готово? Нажмите «Подать»';
+  else t='Готово? Нажмите «Завернуть»';
   hint.textContent=t;
 }
 
@@ -481,6 +511,7 @@ el.addEventListener('pointerdown',e=>{
   else if(h.act.type==='sauce')addSauce(h.act.key);
   else if(h.act.type==='drink'){startPour(h.act.key);el.setPointerCapture(e.pointerId);}
   else if(h.act.type==='glass')emptyGlass();
+  else if(h.act.type==='grill'&&state.stage==='grill'){const b=document.getElementById('serve');if(b)b.click();}
 });
 el.addEventListener('pointermove',e=>{
   if(drag){
@@ -505,10 +536,22 @@ function clearFill(){
   flights.length=0;sauceAnims.length=0;
   for(const c of [...fill.children]){fill.remove(c);if(c.geometry&&c.geometry.type==='TubeGeometry')c.geometry.dispose();}
 }
-function reset(){clearFill();lavash.scale.set(1,1,1);lavash.position.y=lavashY;state=blank();changed();}
-function wrap(done){
-  stopPour();wrapAnim={t:0,done};cook.x=lavash.position.x;if(window.Sfx)Sfx.play('wrap');
+function reset(){
+  clearFill();lavash.scale.set(1,1,1);lavash.position.y=lavashY;
+  roll.visible=false;served.visible=false;lidTarget=1;
+  state=blank();changed();
+}
+/* step 1: roll the lavash and lay it on the grill; it toasts until taken off */
+function rollUp(){
+  if(state.stage!=='build'||wrapAnim)return;
+  stopPour();state.stage='rolling';wrapAnim={t:0,mode:'roll'};cook.x=lavash.position.x;if(window.Sfx)Sfx.play('wrap');
   for(const f of flights){f.obj.position.copy(f.to);}flights.length=0;
+  changed();
+}
+/* step 2: lift the lid, show the finished shawarma, then clear the board for the next order */
+function takeOff(done){
+  if(state.stage!=='grill'||wrapAnim)return;
+  wrapAnim={t:0,mode:'take',done};cook.x=grill.position.x;lidTarget=1;
 }
 
 /* ---------- free Poly Haven assets (CC0); procedural stand-ins stay until they load ---------- */
@@ -558,10 +601,11 @@ loadModel('wooden_bowl_01',1.5).then(m=>{
 });
 loadModel('yellow_onion',0.42).then(m=>{
   if(!m)return;
-  [[1.75,-1.05,0.4],[1.95,-0.6,2.1]].forEach(([x,z,r])=>{const o=m.clone();o.position.set(x,0,z);o.rotation.y=r;scene.add(o);});
+  [[2.75,-1.0,0.4],[2.6,-0.45,2.1]].forEach(([x,z,r])=>{const o=m.clone();o.position.set(x,0,z);o.rotation.y=r;scene.add(o);});
 });
 
-/* finished shawarma (cut-out photo) shown when an order is wrapped */
+let lidTarget=1,lidOpen=1,toastTick=0;
+/* finished shawarma (cut-out photo) shown when an order is taken off the grill */
 const served=new THREE.Sprite(new THREE.SpriteMaterial({map:texLoader.load('assets/textures/shawarma.png',t=>{t.colorSpace=THREE.SRGBColorSpace;}),transparent:true,depthTest:false}));
 served.visible=false;served.renderOrder=10;scene.add(served);
 
@@ -653,19 +697,37 @@ function frame(){
     if(b.userData.tilt>0){b.userData.tilt=Math.max(0,b.userData.tilt-dt*1.6);const s=Math.sin(b.userData.tilt*Math.PI);
       b.rotation.z=s*0.9;b.position.y=s*0.6;b.scale.set(1+s*0.06,1-s*0.06,1+s*0.06);}
   }
-  if(wrapAnim){
-    /* roll the lavash, shrink it away, and pop the finished shawarma up in its place */
-    wrapAnim.t+=dt/1.6;const k=Math.min(wrapAnim.t,1);
-    if(k<0.25){const q=k/0.25;lavash.scale.set(1,1+q*0.6,1-q*0.72);}
-    else if(k<0.4){const q=(k-0.25)/0.15;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));lavash.position.y=lavashY+q*0.8;}
+  /* grill lid and toasting */
+  lidOpen+=(lidTarget-lidOpen)*Math.min(1,dt*6);grillLid.rotation.x=-lidOpen*1.15;
+  if(state.stage==='grill'){
+    state.toast+=dt/5;toastColor(state.toast,rollMat.color);
+    toastTick+=dt;if(toastTick>0.25){toastTick=0;changed();}
+  }
+  const grillTop=new THREE.Vector3(grill.position.x,0.8,grill.position.z+0.1);
+  if(wrapAnim&&wrapAnim.mode==='roll'){
+    /* roll the lavash on the board, then carry the roll over to the grill and close the lid */
+    wrapAnim.t+=dt/1.5;const k=Math.min(wrapAnim.t,1);
+    if(k<0.3){const q=k/0.3;lavash.scale.set(1,1+q*0.6,1-q*0.72);}
+    else if(k<0.42){const q=(k-0.3)/0.12;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));}
     else lavash.scale.set(0.001,0.001,0.001);
-    if(k>=0.3){
-      const q=(k-0.3)/0.7,pop=Math.min(1,q/0.2),bounce=pop<1?pop*(1.15-0.15*pop):1;
+    if(k>=0.38){
+      const q=Math.min(1,(k-0.38)/0.4);roll.visible=true;rollMat.color.set('#ffffff');
+      roll.position.lerpVectors(lavash.position,grillTop,q);roll.position.y+=Math.sin(q*Math.PI)*1.4;
+    }
+    if(k>=0.78)lidTarget=0.22;   /* the lid rests on the roll, pressing it */
+    if(k>=1){wrapAnim=null;state.stage='grill';state.toast=0;if(window.Sfx)Sfx.play('drop');changed();}
+  }else if(wrapAnim&&wrapAnim.mode==='take'){
+    /* lid up, the finished shawarma pops out of the grill */
+    wrapAnim.t+=dt/1.3;const k=Math.min(wrapAnim.t,1);
+    if(k>0.15){
+      roll.visible=false;
+      const q=(k-0.15)/0.85,pop=Math.min(1,q/0.25),bounce=pop<1?pop*(1.15-0.15*pop):1;
       served.visible=true;served.scale.set(0.95*bounce,2.5*bounce,1);
-      served.position.set(lavash.position.x,lavashY+1.3*bounce+q*0.4,lavash.position.z);
+      toastColor(Math.min(state.toast,1.4)*0.6,served.material.color);
+      served.position.set(grill.position.x,1.9*bounce+q*0.5,grill.position.z+0.4);
       served.material.opacity=q>0.8?1-(q-0.8)/0.2:1;
     }
-    if(k>=1){const done=wrapAnim.done;wrapAnim=null;served.visible=false;reset();if(done)done();}
+    if(k>=1){const done=wrapAnim.done;wrapAnim=null;served.visible=false;served.material.color.set('#ffffff');reset();if(done)done();}
   }
   renderer.render(scene,camera);
 }
@@ -677,9 +739,10 @@ window.Kitchen={
   setView(v){setView(v);},
   get view(){return view;},
   get settled(){return camT>=1;},
+  get progress(){return camT;},
   setOrder(o){order=o;updateHint();},
   FILL_OK,FILL_MAX,
-  reset,wrap,
+  reset,roll:rollUp,take:takeOff,toastLabel,TOAST_OK,TOAST_MAX,TOAST_BURNT,
   get state(){return Object.assign({},state);},
   MEAT_NEED
 };

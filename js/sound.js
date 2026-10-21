@@ -73,6 +73,16 @@ window.Sfx={
       l.g.gain.cancelScheduledValues(c.currentTime);l.g.gain.setTargetAtTime(0.0001,c.currentTime,0.08);l.s.stop(c.currentTime+0.4);
     }
   },
+  /* the cook's voice: the browser's built-in Russian speech, no audio files */
+  say:function(text){
+    if(muted||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return;
+    var voices=speechSynthesis.getVoices(),ru=voices.filter(function(v){return /^ru/i.test(v.lang);});
+    if(voices.length&&!ru.length)return;   /* no Russian voice on this device: stay quiet rather than mangle it */
+    var u=new SpeechSynthesisUtterance(text);u.lang='ru-RU';u.rate=1.05;u.pitch=0.85;u.volume=0.9;
+    var male=ru.filter(function(v){return /pavel|dmitr|yuri|maxim|male|муж/i.test(v.name);})[0];
+    if(male||ru[0])u.voice=male||ru[0];
+    speechSynthesis.cancel();speechSynthesis.speak(u);
+  },
   /* pouring pitch rises as the cup fills, like a real glass */
   pourLevel:function(k){if(loops.pour)loops.pour.f.frequency.setTargetAtTime(500+k*1300,ac.currentTime,0.05);},
   get muted(){return muted;},

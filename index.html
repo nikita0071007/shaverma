@@ -78,6 +78,11 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .build li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 .build li span:last-child{color:var(--muted);text-align:right}
 .build li.on span:last-child{color:var(--cream);font-weight:600}
+.build li b{display:inline-block;min-width:1.1em;text-align:center}
+.build li.ok span:last-child{color:var(--pistachio);font-weight:600}
+.build li.bad span:last-child{color:#FF8A6B;font-weight:600}
+.build li.ok{border-color:rgba(143,179,57,.5)}
+.build li.bad{border-color:rgba(255,138,107,.6)}
 .lbl{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .ticket{border:1px dashed var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:12px;min-height:62px}
 .ticket p{margin:0;font-size:16px;font-weight:500}
@@ -125,7 +130,6 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   .panel .lbl{display:none}
   .build{flex-direction:row;flex-wrap:wrap;gap:4px}
   .build li{border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:12px;gap:4px}
-  .build li span:first-child::after{content:':'}
   .build li.on{border-color:var(--turmeric)}
   .btn{padding:10px 14px}
   #msg{min-height:16px;font-size:12px}
@@ -147,6 +151,20 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .bub .ring{border-radius:50%;border:2.5px solid #9B6BB8!important;background:transparent;position:relative}
 .bub .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
 .bub .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:16px!important}
+.rail{position:absolute;top:8px;left:8px;right:8px;display:flex;gap:6px;overflow-x:auto;pointer-events:none;z-index:2;scrollbar-width:none}
+.tk{pointer-events:auto;flex:none;background:#FFFDF6;color:#2B1D14;border:1px solid #d8cdb8;border-top:4px solid #2B1D14;border-radius:4px 4px 8px 8px;padding:5px 8px 6px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;box-shadow:0 3px 8px rgba(0,0,0,.35);font-size:12px}
+.tk b{font-weight:700}
+.tk.sel{border-top-color:var(--turmeric);outline:2px solid var(--turmeric)}
+.tk.courier{background:#FFE9D6;border-top-color:#FF7A1A}
+.tk .pt{display:block;width:100%;height:3px;background:rgba(0,0,0,.15);border-radius:2px;overflow:hidden}
+.tk .pt i{display:block;height:100%}
+.tk .ic{display:flex;gap:4px;align-items:center}
+.tk .ic i{display:block;width:12px;height:12px;border:1px solid rgba(0,0,0,.35)}
+.tk .dot{border-radius:50%}.tk .sq{border-radius:3px}
+.tk .ring{border-radius:50%;border:2px solid #9B6BB8!important;background:transparent;position:relative}
+.tk .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
+.tk .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:14px!important}
+@media (max-width:700px){.rail{top:46px}}
 .flt{position:absolute;left:0;top:0;font-weight:700;font-size:15px;white-space:nowrap;text-shadow:0 1px 0 #1a120c,0 0 6px rgba(0,0,0,.7)}
 .mute{font-size:18px;line-height:1;cursor:pointer;color:var(--cream);min-width:0;padding:8px 12px}
 .mute[aria-pressed="true"]{opacity:.55}
@@ -187,10 +205,10 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 
   <section class="panel">
     <div class="ticket"><span class="lbl">Заказ гостя</span><p id="tkText">Нажмите на гостя с пузырём заказа.</p><div class="bar tbar"><i id="tkBar"></i></div></div>
-    <div><span class="lbl">На лаваше</span><ul class="build" id="bl"></ul></div>
+    <div><span class="lbl" id="blLbl">На лаваше</span><ul class="build" id="bl"></ul></div>
     <div class="btns">
       <button class="btn" id="reset">Сбросить</button>
-      <button class="btn primary" id="serve">Подать</button>
+      <button class="btn primary" id="serve">Завернуть</button>
     </div>
     <p id="msg" aria-live="polite"></p>
   </section>
@@ -201,6 +219,9 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 <script>
 (function(){
 function sfx(n){if(window.Sfx)Sfx.play(n);}
+var lastSay=0;
+function say(t,force){var now=performance.now();if(!force&&now-lastSay<5000)return;lastSay=now;if(window.Sfx)Sfx.say(t);}
+var HELLO=['Здравствуйте! Присаживайтесь, сейчас всё будет.','Добрый день! Что будем заказывать?','Привет! Шаверма уже крутится.','Здравствуйте! Секундочку, приму заказ.'];
 var W=640,H=400;
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 var dpr=Math.min(window.devicePixelRatio||1,2);
@@ -245,7 +266,7 @@ function applySave(s){
   G.tables=clamp(s.tables|0,3,6);G.comfort=clamp(s.comfort|0,0,3);G.sign=clamp(s.sign|0,0,3);
   if(typeof s.courierT==='number')G.courierT=clamp(s.courierT,0,COURIER_EVERY);
 }
-function dayLen(){return Math.min(120,80+(G.day-1)*5);}
+function dayLen(){return Math.min(240,150+(G.day-1)*10);}   /* 2.5-4 minutes: cooking with the grill takes a while */
 function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 function rnd(a,b){return a+Math.random()*(b-a);}
@@ -279,7 +300,7 @@ function showIntro(){
   }
   showOv('<h2>Открываем шаверму</h2>'+
     '<p>Гости заходят, садятся за столики и ждут заказ. Чем быстрее и точнее вы соберёте шаверму, тем больше чаевых и выше репутация.</p>'+
-    '<ol><li>Нажмите на гостя с пузырём заказа — откроется кухня.</li><li>Проведите по нужному вертелу, чтобы срезать мясо, добавьте помидоры и огурцы, лук — если просили, и полейте соусом.</li><li>Если гость хочет напиток, держите палец на кувшине, пока стакан не наполнится до зелёной черты.</li><li>Нажмите «Подать».</li></ol>'+
+    '<ol><li>Нажмите на гостя с пузырём заказа — откроется кухня. Сверху висят чеки всех заказов, справа видно, что уже готово.</li><li>Проведите по нужному вертелу, чтобы срезать мясо, добавьте помидоры и огурцы, лук — если просили, и полейте соусом.</li><li>Если гость хочет напиток, держите палец на кувшине, пока стакан не наполнится до зелёной черты.</li><li>Нажмите «Завернуть» — шаверма ляжет на гриль. Когда станет золотистой, нажмите «Подать».</li></ol>'+
     '<button class="btn go" id="start">Открыть день 1</button>'+
     '<p class="credits">3D-модели: Meshy (CC BY 4.0), Poly Haven (CC0)</p>');
   document.getElementById('start').onclick=startDay;
@@ -287,7 +308,7 @@ function showIntro(){
 var UPG=[
   {id:'tables',name:'Ещё один столик',desc:'Больше гостей в зале одновременно.',
     max:function(){return G.tables>=6;},lvl:function(){return (G.tables-3)+' из 3';},cost:function(){return 600+(G.tables-3)*250;},buy:function(){G.tables++;}},
-  {id:'comfort',name:'Мягкие диванчики',desc:'Гости ждут заказ на 25% дольше.',
+  {id:'comfort',name:'Мягкие диванчики',desc:'Гости ждут заказ на 20% дольше.',
     max:function(){return G.comfort>=3;},lvl:function(){return G.comfort+' из 3';},cost:function(){return 700+G.comfort*500;},buy:function(){G.comfort++;}},
   {id:'sign',name:'Яркая вывеска',desc:'Гости приходят чаще.',
     max:function(){return G.sign>=3;},lvl:function(){return G.sign+' из 3';},cost:function(){return 800+G.sign*600;},buy:function(){G.sign++;}}
@@ -323,7 +344,8 @@ function startDay(){
   G.stats={served:0,lost:0,earned:0};
   resetBuild();setView('hall');updateTicket();msg('');hud();hideOv();
 }
-function maxPatience(){return Math.max(24,40-Math.min(G.day,8)*1.5)*(1+0.25*G.comfort);}
+/* guests wait about a minute and a half (a bit less on later days); sofas add 20% each */
+function maxPatience(){return Math.max(60,95-Math.min(G.day,10)*3.5)*(1+0.2*G.comfort);}
 function nextInterval(){
   var base=8.5-G.sign*1.3-(G.rep-3)*0.7;
   return clamp(base*rnd(.8,1.2),3,12);
@@ -395,7 +417,8 @@ function update(dt){
   }
   G.cust.slice().forEach(function(c){
     if(c.state==='enter'){
-      if(moveAlong(c,dt)){c.state='wait';c.moving=false;sfx('order');if(!G.sel){G.sel=c;updateTicket();}}
+      if(moveAlong(c,dt)){c.state='wait';c.moving=false;sfx('order');
+        say(c.courier?'Привет, Мчим Еда! Сейчас соберу заказ.':HELLO[Math.floor(Math.random()*HELLO.length)]);if(!G.sel){G.sel=c;updateTicket();}}
     }else if(c.state==='wait'){
       if(c.courier)c.bagOpen=Math.min(1,c.bagOpen+dt*2.5);
       c.patience-=dt;
@@ -435,20 +458,47 @@ function update(dt){
 var VEG_NAMES={tomato:'Помидоры',cucumber:'Огурцы',onion:'Лук'};
 function resetBuild(){if(K())K().reset();else window.onKitchenChange({meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null});}
 window.onKitchenChange=function(st){KST=st;renderBuild();};
+/* The panel is a checklist: what the selected guest ordered, and whether the lavash matches yet.
+   ✓ done, ✗ wrong, · still to do. With no guest selected it just lists what is on the lavash. */
 function renderBuild(){
-  var need=K()?K().MEAT_NEED:3;
-  var meat=KST.meat==='mixed'?'Смешали':KST.meat?MEAT[KST.meat].name:'—';
-  var rows=[
-    ['Мясо',KST.meatN?meat+' · '+Math.min(KST.meatN,need)+'/'+need:'—',KST.meatN>0],
-    [VEG_NAMES.tomato,KST.tomato?'есть':'—',KST.tomato],
-    [VEG_NAMES.cucumber,KST.cucumber?'есть':'—',KST.cucumber],
-    [VEG_NAMES.onion,KST.onion?'есть':'—',KST.onion],
-    ['Соус',KST.sauce==='mixed'?'Смешали':KST.sauce?SAUCE[KST.sauce].name:'—',!!KST.sauce],
-    ['Напиток',KST.drink==='mixed'?'Смешали':KST.drink?DRINK[KST.drink].name+' · '+(KST.fill>1.02?'перелили':Math.round(Math.min(KST.fill,1)*100)+'%'):'—',!!KST.drink]
-  ];
+  var need=K()?K().MEAT_NEED:3,c=G&&G.sel&&G.sel.state==='wait'?G.sel:null,o=c&&c.order;
+  var meatNow=KST.meat==='mixed'?'смешали':KST.meat?MEAT[KST.meat].name.toLowerCase():'';
+  function st(ok,wrong){return wrong?'bad':ok?'ok':'';}
+  var rows;
+  if(o){
+    var meatWrong=KST.meatN>0&&KST.meat!==o.meat;
+    rows=[
+      ['Мясо: '+MEAT[o.meat].name.toLowerCase(),meatWrong?meatNow:Math.min(KST.meatN,need)+'/'+need,st(!meatWrong&&KST.meatN>=need,meatWrong)],
+      ['Помидоры','',st(KST.tomato)],
+      ['Огурцы','',st(KST.cucumber)],
+      [o.onion?'С луком':'Без лука','',o.onion?st(KST.onion):(KST.onion?'bad':'ok')],
+      ['Соус: '+SAUCE[o.sauce].name.toLowerCase(),KST.sauce&&KST.sauce!==o.sauce?(KST.sauce==='mixed'?'смешали':SAUCE[KST.sauce].name.toLowerCase()):'',st(KST.sauce===o.sauce,KST.sauce&&KST.sauce!==o.sauce)]
+    ];
+    if(o.drink){
+      var dWrong=KST.drink&&KST.drink!==o.drink,over=KST.fill>(K()?K().FILL_MAX:1.02);
+      rows.push(['Напиток: '+DRINK[o.drink].name.toLowerCase(),dWrong?(KST.drink==='mixed'?'смешали':DRINK[KST.drink].name.toLowerCase()):(KST.drink?(over?'перелили':Math.round(Math.min(KST.fill,1)*100)+'%'):''),
+        st(!dWrong&&!over&&KST.fill>=(K()?K().FILL_OK:0.7),dWrong||over)]);
+    }
+  }else{
+    rows=[
+      ['Мясо',KST.meatN?meatNow+' '+Math.min(KST.meatN,need)+'/'+need:'—',KST.meatN?'on':''],
+      ['Помидоры',KST.tomato?'есть':'—',KST.tomato?'on':''],
+      ['Огурцы',KST.cucumber?'есть':'—',KST.cucumber?'on':''],
+      ['Лук',KST.onion?'есть':'—',KST.onion?'on':''],
+      ['Соус',KST.sauce==='mixed'?'смешали':KST.sauce?SAUCE[KST.sauce].name:'—',KST.sauce?'on':''],
+      ['Напиток',KST.drink==='mixed'?'смешали':KST.drink?DRINK[KST.drink].name+' '+Math.round(Math.min(KST.fill,1)*100)+'%':'—',KST.drink?'on':'']
+    ];
+  }
+  if(K()&&KST.stage!=='build'){
+    var lbl=KST.stage==='rolling'?'заворачиваем':K().toastLabel(KST.toast);
+    rows.push(['Гриль',lbl,KST.toast>K().TOAST_BURNT?'bad':KST.toast>=K().TOAST_OK&&KST.toast<=K().TOAST_MAX?'ok':'']);
+  }
+  var mark={ok:'✓',bad:'✗',on:'',"":'·'};
   document.getElementById('bl').innerHTML=rows.map(function(r){
-    return '<li'+(r[2]?' class="on"':'')+'><span>'+r[0]+'</span><span>'+r[1]+'</span></li>';
+    return '<li class="'+r[2]+'"><span>'+r[0]+'</span><span>'+(r[1]?r[1]+' ':'')+(o?'<b>'+mark[r[2]]+'</b>':'')+'</span></li>';
   }).join('');
+  document.getElementById('blLbl').textContent=o?(c.courier?'Заказ курьера':'Заказ стола '+(c.table+1)):'На лаваше';
+  document.getElementById('serve').textContent=K()&&KST.stage==='build'?'Завернуть':'Подать';
 }
 function setView(v){
   view=v;
@@ -476,14 +526,18 @@ function updateTicket(){
   if(K())K().setOrder(G.sel&&G.sel.state==='wait'?G.sel.order:null);
   if(G.sel&&G.sel.state==='wait'){el.textContent=(G.sel.courier?'Курьер '+COURIER_BRAND+', с собой':'Стол '+(G.sel.table+1))+': '+orderText(G.sel.order);}
   else{el.textContent='Нажмите на гостя с пузырём заказа.';}
+  renderBuild();
 }
 document.getElementById('reset').onclick=function(){resetBuild();msg('');};
 document.getElementById('serve').onclick=function(){
   if(G.phase!=='play')return;
   var c=G.sel;
   if(!c||c.state!=='wait'){msg('Сначала выберите гостя с заказом.');return;}
+  if(K()&&KST.stage==='rolling')return;
   if(!KST.meatN){msg('Срежьте мясо с вертела.');setView('kitchen');return;}
   if(!KST.sauce){msg('Полейте соусом.');setView('kitchen');return;}
+  /* step 1: wrap it and put it on the grill */
+  if(K()&&KST.stage==='build'){K().roll();sfx('click');msg('На гриле. Подайте, когда станет золотистой.');return;}
   var bad=[];
   if(KST.meat!==c.order.meat)bad.push('мясо');
   else if(KST.meatN<(K()?K().MEAT_NEED:3))bad.push('мало мяса');
@@ -496,7 +550,13 @@ document.getElementById('serve').onclick=function(){
     else if(KST.fill>(K()?K().FILL_MAX:1.02))bad.push('перелили');
     else if(KST.fill<(K()?K().FILL_OK:0.7))bad.push('недолили');
   }
-  var tip=Math.round(100*(c.patience/c.maxP));
+  var crisp=0;
+  if(K()){
+    if(KST.toast>K().TOAST_BURNT)bad.push('сгорела');
+    else if(KST.toast<K().TOAST_OK)bad.push('не прожарена');
+    else if(KST.toast<=K().TOAST_MAX)crisp=30;   /* golden and crispy: bonus tip */
+  }
+  var tip=Math.round(100*(c.patience/c.maxP))+crisp;
   c.pay=Math.max(100,250+tip-80*bad.length)+(c.order.drink?DRINK_PRICE:0)+(c.courier?COURIER_BONUS:0);
   c.state='eat';c.eatT=c.courier?1.2:3.5;   /* a courier just packs the order and goes */
   G.stats.served++;
@@ -505,10 +565,11 @@ document.getElementById('serve').onclick=function(){
     msg('Ошибка: '+bad.join(', ')+'. Гость недоволен, оплата ниже.');sfx('bad');
   }else{
     G.rep=clamp(G.rep+0.1,1,5);
-    msg('Идеально! Чаевые: '+tip+' ₽.');sfx('perfect');
+    msg((crisp?'Идеально, хрустящая! ':'Идеально! ')+'Чаевые: '+tip+' ₽.');sfx('perfect');
+    say(c.courier?'Готово, забирайте!':'Приятного аппетита!');
   }
   G.sel=null;pickNext();updateTicket();hud();
-  if(K())K().wrap(function(){if(G.phase==='play')setView('hall');});
+  if(K())K().take(function(){if(G.phase==='play')setView('hall');});
   else resetBuild();
 };
 cv.addEventListener('pointerdown',function(e){
