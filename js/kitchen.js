@@ -11,6 +11,7 @@ const MEATS={
 };
 const SAUCES={garlic:{name:'ЧЕСНОК',c:'#F4ECD6'},spicy:{name:'ОСТРЫЙ',c:'#C8321E'},cheese:{name:'СЫРНЫЙ',c:'#F0B92E'}};
 const MEAT_NEED=3,MEAT_MAX=8;
+const perks={knife:1,grill:1,pour:1};   /* multipliers from shop upgrades */
 
 const root=document.getElementById('kitchen');
 const hint=document.createElement('div');hint.className='khint';
@@ -357,7 +358,7 @@ function updateDrinks(dt){
     const p=j.userData.p;j.position.lerpVectors(j.userData.home,target,p);j.rotation.z=-1.25*p;
   }
   if(pouring&&jugs[pouring.key].userData.p>0.9){
-    state.fill+=dt*0.3;
+    state.fill+=dt*0.3*perks.pour;
     const top=0.05+Math.min(state.fill,1)*(GLASS_H-0.1),y0=1.45;
     stream.visible=true;stream.scale.y=Math.max(0.01,y0-top);
     stream.position.set(glass.position.x-0.05,(y0+top)/2,glass.position.z);
@@ -452,11 +453,11 @@ const stripGeo=(()=>{
 })();
 function shave(sp,point){
   if(state.meatN>=MEAT_MAX){hint.textContent='Мяса уже достаточно';return;}
-  state.meatN++;cook.x=sp.g.position.x;
+  state.meatN=Math.min(MEAT_MAX,state.meatN+perks.knife);cook.x=sp.g.position.x;
   if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
   state.meat=!state.meat||state.meat===sp.kind?sp.kind:'mixed';
   sp.shrink=Math.max(0.86,sp.shrink-0.006);sp.meat.scale.set(sp.shrink,1,sp.shrink);
-  for(let i=0;i<3;i++){
+  for(let i=0;i<3*perks.knife;i++){
     const s=mesh(stripGeo,meatMat[sp.kind+'Strip']);
     s.rotation.set(-Math.PI/2+rnd(-0.3,0.3),rnd(0,6.28),rnd(-0.2,0.2));
     fly(s,point,spot(0.75,0.3,0.05+state.meatN*0.012),0.55+i*0.08,1.2);
@@ -700,7 +701,7 @@ function frame(){
   /* grill lid and toasting */
   lidOpen+=(lidTarget-lidOpen)*Math.min(1,dt*6);grillLid.rotation.x=-lidOpen*1.15;
   if(state.stage==='grill'){
-    state.toast+=dt/5;toastColor(state.toast,rollMat.color);
+    state.toast+=dt/5*perks.grill;toastColor(state.toast,rollMat.color);
     toastTick+=dt;if(toastTick>0.25){toastTick=0;changed();}
   }
   const grillTop=new THREE.Vector3(grill.position.x,0.8,grill.position.z+0.1);
@@ -741,6 +742,7 @@ window.Kitchen={
   get settled(){return camT>=1;},
   get progress(){return camT;},
   setOrder(o){order=o;updateHint();},
+  setPerks(p){Object.assign(perks,p);},
   FILL_OK,FILL_MAX,
   reset,roll:rollUp,take:takeOff,toastLabel,TOAST_OK,TOAST_MAX,TOAST_BURNT,
   get state(){return Object.assign({},state);},

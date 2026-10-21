@@ -151,6 +151,13 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .bub .ring{border-radius:50%;border:2.5px solid #9B6BB8!important;background:transparent;position:relative}
 .bub .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
 .bub .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:16px!important}
+.coach{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:4;width:min(560px,calc(100% - 24px));background:var(--turmeric);color:#2B1A0A;border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,.45);animation:coachIn .35s ease-out}
+.coach p{margin:0;flex:1;font-weight:600;font-size:15px}
+.coach .btn{flex:none;background:rgba(0,0,0,.12);border-color:transparent;color:#2B1A0A;font-size:12px;padding:6px 10px}
+@keyframes coachIn{from{opacity:0;transform:translate(-50%,10px)}}
+.bub.pulse{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(242,169,59,.55)}}
+@media (max-width:700px){.coach{bottom:44px}.coach p{font-size:13px}}
 .rail{position:absolute;top:8px;left:8px;right:8px;display:flex;gap:6px;overflow-x:auto;pointer-events:none;z-index:2;scrollbar-width:none}
 .tk{pointer-events:auto;flex:none;background:#FFFDF6;color:#2B1D14;border:1px solid #d8cdb8;border-top:4px solid #2B1D14;border-radius:4px 4px 8px 8px;padding:5px 8px 6px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;box-shadow:0 3px 8px rgba(0,0,0,.35);font-size:12px}
 .tk b{font-weight:700}
@@ -199,6 +206,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
   <div class="stage">
     <canvas id="cv" width="640" height="400" aria-label="Зал шаурмичной"></canvas>
     <div class="kitchen" id="kitchen" hidden aria-label="Кухня: вертела, лаваш, овощи и соусы"></div>
+    <div class="coach" id="coach" hidden><p id="coachText"></p><button type="button" class="btn" id="coachSkip">Пропустить обучение</button></div>
     <div class="overlay" id="ov"></div>
   </div>
   </div>
@@ -248,13 +256,13 @@ function K(){return window.Kitchen;}
 var anim=0;
 
 function newGame(){
-  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
+  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
 }
 /* ---------- save ---------- */
 /* Progress is saved between days: a reload mid-day restarts that day with the money it opened with. */
 var SAVE_KEY='shaverma-save-v1';
 function save(){
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,courierT:G.courierT}));}catch(e){}
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT}));}catch(e){}
 }
 function loadSave(){
   try{var s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.v===1)return s;}catch(e){}
@@ -265,7 +273,10 @@ function applySave(s){
   G.day=Math.max(1,s.day|0);G.money=Math.max(0,+s.money||0);G.rep=clamp(+s.rep||3,1,5);
   G.tables=clamp(s.tables|0,3,6);G.comfort=clamp(s.comfort|0,0,3);G.sign=clamp(s.sign|0,0,3);
   if(typeof s.courierT==='number')G.courierT=clamp(s.courierT,0,COURIER_EVERY);
+  if(s.perks)for(var k in G.perks)G.perks[k]=s.perks[k]?1:0;
 }
+/* kitchen perks bought in the shop change how the 3D kitchen behaves */
+function syncPerks(){if(K())K().setPerks({knife:G.perks.knife?2:1,grill:G.perks.grill?1.4:1,pour:G.perks.pour?2:1});}
 function dayLen(){return Math.min(240,150+(G.day-1)*10);}   /* 2.5-4 minutes: cooking with the grill takes a while */
 function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -294,7 +305,7 @@ function showIntro(){
     var wipe=document.getElementById('wipe');
     wipe.onclick=function(){
       if(!wipe.dataset.sure){wipe.dataset.sure='1';wipe.textContent='Точно? Прогресс сотрётся';return;}
-      clearSave();newGame();hud();showIntro();
+      clearSave();try{localStorage.removeItem(TUT_KEY);}catch(e){}newGame();hud();showIntro();
     };
     return;
   }
@@ -311,8 +322,15 @@ var UPG=[
   {id:'comfort',name:'Мягкие диванчики',desc:'Гости ждут заказ на 20% дольше.',
     max:function(){return G.comfort>=3;},lvl:function(){return G.comfort+' из 3';},cost:function(){return 700+G.comfort*500;},buy:function(){G.comfort++;}},
   {id:'sign',name:'Яркая вывеска',desc:'Гости приходят чаще.',
-    max:function(){return G.sign>=3;},lvl:function(){return G.sign+' из 3';},cost:function(){return 800+G.sign*600;},buy:function(){G.sign++;}}
+    max:function(){return G.sign>=3;},lvl:function(){return G.sign+' из 3';},cost:function(){return 800+G.sign*600;},buy:function(){G.sign++;}},
+  perk('knife','Острый нож','Один взмах срезает сразу две порции мяса.',900),
+  perk('grill','Мощный гриль','Шаверма жарится на 40% быстрее.',1000),
+  perk('pour','Быстрый кран','Напитки наливаются вдвое быстрее.',700)
 ];
+function perk(id,name,desc,price){
+  return {id:id,name:name,desc:desc,max:function(){return !!G.perks[id];},lvl:function(){return G.perks[id]?'куплено':'нет';},
+    cost:function(){return price;},buy:function(){G.perks[id]=1;syncPerks();}};
+}
 function showSummary(){
   if(G.phase==='play')sfx('dayEnd');
   G.phase='summary';setView('hall');
@@ -342,7 +360,9 @@ function showSummary(){
 function startDay(){
   G.phase='play';G.time=0;G.spawnT=1;G.cust=[];G.occ=[];G.sel=null;G.floats=[];G.lastLeft=-1;
   G.stats={served:0,lost:0,earned:0};
+  G.tut=G.day===1&&!tutorialDone()?{}:null;
   resetBuild();setView('hall');updateTicket();msg('');hud();hideOv();
+  if(G.tut)spawn({meat:'chicken',sauce:'garlic',onion:true,drink:null});
 }
 /* guests wait about a minute and a half (a bit less on later days); sofas add 20% each */
 function maxPatience(){return Math.max(60,95-Math.min(G.day,10)*3.5)*(1+0.2*G.comfort);}
@@ -350,7 +370,7 @@ function nextInterval(){
   var base=8.5-G.sign*1.3-(G.rep-3)*0.7;
   return clamp(base*rnd(.8,1.2),3,12);
 }
-function spawn(){
+function spawn(fixedOrder){
   var free=[];
   for(var i=0;i<G.tables;i++)if(!G.occ[i])free.push(i);
   if(!free.length)return false;
@@ -362,8 +382,7 @@ function spawn(){
   var c={
     x:DOOR.x,y:DOOR.y,table:t,seat:seat,lane:lane,state:'enter',
     path:[{x:lane,y:348},{x:lane,y:seat.y},{x:seat.x,y:seat.y}],
-    order:{meat:Math.random()<.5?'chicken':'beef',sauce:SAUCE_KEYS[Math.floor(Math.random()*3)],onion:Math.random()<.6,
-      drink:Math.random()<.45?DRINK_KEYS[Math.floor(Math.random()*3)]:null},
+    order:fixedOrder||randomOrder(.45),
     patience:mp,maxP:mp,eatT:0,pay:0,moving:true,
     skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:SHIRT[Math.floor(Math.random()*SHIRT.length)],hair:HAIR[Math.floor(Math.random()*HAIR.length)]
   };
@@ -380,6 +399,40 @@ function spawnCourier(){
     patience:mp,maxP:mp,eatT:0,pay:0,moving:true,bagOpen:0,
     skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:COURIER_COLOR,hair:HAIR[Math.floor(Math.random()*HAIR.length)]
   });
+}
+function randomOrder(drinkChance){
+  return {meat:Math.random()<.5?'chicken':'beef',sauce:SAUCE_KEYS[Math.floor(Math.random()*3)],onion:Math.random()<.6,
+    drink:Math.random()<drinkChance?DRINK_KEYS[Math.floor(Math.random()*3)]:null};
+}
+
+/* ---------- tutorial: day 1 for a new player is one patient guest and a coach walking through each step ---------- */
+var TUT_KEY='shaverma-tutorial-done';
+function tutorialDone(){try{return localStorage.getItem(TUT_KEY)==='1';}catch(e){return true;}}
+var coachEl=document.getElementById('coach'),coachText=document.getElementById('coachText'),lastCoach='';
+function coach(t){
+  if(t===lastCoach)return;lastCoach=t;
+  coachEl.hidden=!t;if(t){coachText.textContent=t;say(t,true);}
+}
+function endTutorial(praise){
+  G.tut=null;coach('');try{localStorage.setItem(TUT_KEY,'1');}catch(e){}
+  G.spawnT=2;
+  if(praise){msg('Обучение пройдено! Дальше гости пойдут сами.');say('Отлично! Дальше гости пойдут сами.',true);}
+}
+document.getElementById('coachSkip').onclick=function(){endTutorial(false);};
+/* which step the player is on, worked out from what has been done so far */
+function tutorialStep(){
+  var c=G.cust[0];
+  if(!c||c.state==='enter')return 'Заходит первый гость. Сейчас он сядет за столик…';
+  if(c.state!=='wait')return '';
+  if(view!=='kitchen')return 'Над гостем пузырь с заказом. Нажмите на него — откроется кухня.';
+  if(KST.stage==='grill')return KST.toast<(K()?K().TOAST_OK:0.55)?'Шаверма жарится. Ждём, пока станет золотистой…':'Золотистая! Нажмите «Подать».';
+  if(KST.meat&&KST.meat!=='chicken')return 'Гость просил курицу. Нажмите «Сбросить» и срежьте с левого вертела.';
+  if(KST.meatN<3)return 'Проведите пальцем по левому вертелу с курицей — нож срежет мясо. Нужно 3 раза.';
+  if(!KST.tomato)return 'Нажмите на миску с помидорами.';
+  if(!KST.cucumber)return 'Теперь огурцы.';
+  if(!KST.onion)return 'Гость просил с луком — нажмите на миску с луком.';
+  if(KST.sauce!=='garlic')return KST.sauce?'Нужен чесночный соус. Нажмите «Сбросить» и соберите заново.':'Полейте чесночным соусом — белая бутылка.';
+  return 'Всё по заказу! Нажмите «Завернуть» — шаверма ляжет на гриль.';
 }
 function moveAlong(c,dt){
   var left=95*dt;
@@ -407,9 +460,10 @@ function float(x,y,text,color){G.floats.push({x:x,y:y,text:text,color:color,t:0}
 function update(dt){
   anim+=dt;
   if(G.phase!=='play')return;
-  G.time+=dt;
+  if(G.tut){coach(tutorialStep());G.cust.forEach(function(c){c.patience=c.maxP;});}   /* nobody leaves and the clock stops while learning */
+  else G.time+=dt;
   var len=dayLen();
-  if(G.time<len){
+  if(G.time<len&&!G.tut){
     G.spawnT-=dt;
     if(G.spawnT<=0)G.spawnT=spawn()?nextInterval():1;
     G.courierT+=dt;
@@ -517,7 +571,7 @@ document.getElementById('tabKitchen').onclick=function(){sfx('click');setView('k
 var muteBtn=document.getElementById('mute');
 function syncMute(){var m=window.Sfx&&Sfx.muted;muteBtn.textContent=m?'🔇':'🔊';muteBtn.setAttribute('aria-pressed',m?'true':'false');}
 muteBtn.onclick=function(){if(window.Sfx){Sfx.muted=!Sfx.muted;syncMute();}};syncMute();
-document.addEventListener('kitchenready',function(){cv.hidden=true;K().start();setView(view);renderBuild();});
+document.addEventListener('kitchenready',function(){cv.hidden=true;K().start();setView(view);syncPerks();renderBuild();});
 function orderText(o){
   return MEAT[o.meat].name+', '+SAUCE[o.sauce].name.toLowerCase()+' соус, '+(o.onion?'с луком':'без лука')+(o.drink?' + '+DRINK[o.drink].name.toLowerCase():'');
 }
@@ -568,6 +622,7 @@ document.getElementById('serve').onclick=function(){
     msg((crisp?'Идеально, хрустящая! ':'Идеально! ')+'Чаевые: '+tip+' ₽.');sfx('perfect');
     say(c.courier?'Готово, забирайте!':'Приятного аппетита!');
   }
+  if(G.tut)endTutorial(true);
   G.sel=null;pickNext();updateTicket();hud();
   if(K())K().take(function(){if(G.phase==='play')setView('hall');});
   else resetBuild();

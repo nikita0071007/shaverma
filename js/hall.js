@@ -59,10 +59,38 @@ const tables=TABLES.map(([x,y])=>{
 const SEAT_DX=-1.75;   /* chair sits on the table's left side */
 function loadPH(name,width,file=name){return new Promise(res=>gltf.load(PH+name+'/'+file+'.gltf',d=>res(fitted(d.scene,width)),undefined,()=>res(null)));}
 loadPH('round_wooden_table_01',2.6).then(m=>{if(!m)return;for(const t of tables){t.userData.stub.forEach(s=>s.visible=false);t.add(m.clone());}});
+/* "soft sofas" upgrade: level 1 seat cushion, 2 back cushion, 3 a little vase of flowers on the table */
+const comfortBits=[[],[],[]];
+const cushionMat=new THREE.MeshStandardMaterial({color:'#b8322a',roughness:0.95});
 loadPH('WoodenChair_01',1.25,'WoodenChair_01_lo').then(m=>{
   if(!m)return;
-  for(const t of tables){const c=m.clone();c.position.set(SEAT_DX-0.15,0,0);c.rotation.y=Math.PI/2;t.add(c);}
+  const seatY=m.userData.height*0.47;
+  for(const t of tables){
+    const c=m.clone();c.position.set(SEAT_DX-0.15,0,0);c.rotation.y=Math.PI/2;t.add(c);
+    const seat=mesh(new THREE.BoxGeometry(1.05,0.2,1.05),cushionMat);seat.position.set(SEAT_DX-0.15,seatY+0.12,0);t.add(seat);comfortBits[0].push(seat);
+    const back=mesh(new THREE.BoxGeometry(0.2,0.9,0.95),cushionMat);back.position.set(SEAT_DX-0.62,seatY+0.75,0);t.add(back);comfortBits[1].push(back);
+  }
 });
+for(const t of tables){
+  const vase=new THREE.Group();vase.position.set(0.35,2.42,-0.35);t.add(vase);comfortBits[2].push(vase);
+  vase.add(mesh(new THREE.CylinderGeometry(0.12,0.09,0.4,12),new THREE.MeshPhysicalMaterial({color:'#9fd0d8',roughness:0.1,transparent:true,opacity:0.7})));
+  for(let i=0;i<3;i++){const f=mesh(new THREE.SphereGeometry(0.11,10,8),new THREE.MeshStandardMaterial({color:['#e8455a','#f2c23b','#ffffff'][i]}));f.position.set((i-1)*0.12,0.42+i%2*0.08,0);vase.add(f);}
+}
+
+/* "bright sign" upgrade: neon signs light up one by one */
+function neon(text,color,w,h){
+  const c=document.createElement('canvas');c.width=1024;c.height=Math.round(1024*h/w);const g=c.getContext('2d');
+  g.font='800 '+Math.round(c.height*0.55)+'px Unbounded,Onest,Arial,sans-serif';g.textAlign='center';g.textBaseline='middle';
+  g.shadowColor=color;g.shadowBlur=40;g.fillStyle=color;g.fillText(text,c.width/2,c.height/2);
+  g.shadowBlur=12;g.fillStyle='#ffffff';g.fillText(text,c.width/2,c.height/2);
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,toneMapped:false,depthWrite:false}));
+}
+const signs=[neon('МОЯ ШАВЕРМА','#ff7a1a',6.5,1.4),neon('ВКУСНО 24/7','#3ad6ff',5.5,1.3),neon('♥ ШАВА','#ff3d8b',4.2,1.3)];
+signs[0].position.set(10.8,6.2,BACK+0.05);
+signs[1].position.set(LEFT_WALL+0.05,5.5,9);signs[1].rotation.y=Math.PI/2;
+signs[2].position.set(RIGHT_WALL-0.05,6.6,8);signs[2].rotation.y=-Math.PI/2;
+signs.forEach(m=>{m.visible=false;hall.add(m);});
 loadPH('hanging_industrial_lamp',1.1).then(m=>{
   if(!m)return;
   for(const t of tables){const l=m.clone();l.position.set(0,11.2,0);t.add(l);}
@@ -210,6 +238,8 @@ hooks.push((dt,t)=>{
     cookG.rotation.y=walking?(dx>0?Math.PI/2:-Math.PI/2):Math.PI;
   }
   tables.forEach((tb,i)=>{tb.visible=i<G.tables;});
+  comfortBits.forEach((bits,lvl)=>bits.forEach(b=>{b.visible=G.comfort>lvl;}));
+  signs.forEach((m,i)=>{m.visible=G.sign>i;if(m.visible)m.material.opacity=0.85+0.15*Math.sin(t*(i===2?9:3)+i*2)*(Math.random()<0.02?3:1);});
   const seen=new Set();
   let nearDoor=false;
   for(const c of G.cust){
