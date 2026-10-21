@@ -140,7 +140,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .stage:has(#cv[hidden]){aspect-ratio:16/10}   /* 3D mode: the stage keeps the flat hall's proportions */
 @media (max-width:700px){.stage:has(#cv[hidden]){aspect-ratio:auto}}
 .bubbles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.bub{position:absolute;left:0;top:0;pointer-events:auto;border:2px solid #2B1D14;background:#FFF6E0;border-radius:10px;padding:4px 7px 6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 3px 8px rgba(0,0,0,.3)}
+.bub{position:absolute;left:0;top:0;pointer-events:auto;color:#2B1D14;border:2px solid #2B1D14;background:#FFF6E0;border-radius:10px;padding:4px 7px 6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 3px 8px rgba(0,0,0,.3)}
 .bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:#2B1D14;border-bottom:0}
 .bub.sel{border-color:var(--turmeric);box-shadow:0 0 0 3px rgba(242,169,59,.45)}
 .bub.courier{background:#FFE2C8}
@@ -172,6 +172,9 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .tk .dot{border-radius:50%}.tk .sq{border-radius:3px}
 .tk .ring{border-radius:50%;border:2px solid #9B6BB8!important;background:transparent;position:relative}
 .tk .ring.no::after{content:'';position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:#D8432B;transform:rotate(-45deg)}
+.tk .nm,.bub .nm{font-weight:700;font-size:11px;white-space:nowrap}
+.tk .ic i.mini,.bub .ic i.mini{width:8px!important;height:8px!important;border-radius:2px}
+.bub .ic{flex-wrap:nowrap}
 .tk .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:14px!important}
 @media (max-width:700px){.rail{top:46px}}
 .flt{position:absolute;left:0;top:0;font-weight:700;font-size:15px;white-space:nowrap;text-shadow:0 1px 0 #1a120c,0 0 6px rgba(0,0,0,.7)}
@@ -258,6 +261,9 @@ var SAUCE={garlic:{name:'Чесночный',c:'#FFF1CF'},spicy:{name:'Остр�
 var SAUCE_KEYS=['garlic','spicy','cheese'];
 var DRINK={tea:{name:'Чай',c:'#9A4A1C'},ayran:{name:'Айран',c:'#F3EFE4'},cola:{name:'Кола',c:'#2A0F06'}};
 var DRINK_KEYS=['tea','ayran','cola'],DRINK_PRICE=60;
+/* self-service drinks fridge by the right wall: guests may grab a bottle on the way in (paid at once) */
+var FRIDGE_SPOT={x:640,y:200},FRIDGE_PRICE=80,FRIDGE_REFILL=20,FRIDGE_REFILL_COST=400;
+var FRIDGE_DRINKS=[{n:'Кола',c:'#2a0f06'},{n:'Лимонад',c:'#f4e04d'},{n:'Тархун',c:'#3fbf3f'},{n:'Вода',c:'#bfe6ff'},{n:'Сок',c:'#ff9a1f'},{n:'Айран',c:'#f3efe4'},{n:'Морс',c:'#a3123a'}];
 /* Delivery couriers: one walks in every COURIER_EVERY seconds of play (the timer carries over between days),
    sets the open delivery bag down by the counter and waits for a take-away order. */
 var COURIER_BRAND='Мчим Еда',COURIER_COLOR='#FF7A1A',COURIER_EVERY=300,COURIER_FIRST=60,COURIER_BONUS=100;
@@ -268,20 +274,20 @@ var SKIN=['#F2C9A0','#E0AC83','#C58C63','#8D5A3B'];
 var SHIRT=['#3B82C4','#7A5CC4','#2A9D8F','#E9A23B','#C7546B','#4F7A3A','#5B6C8F'];
 var HAIR=['#2B1D14','#5A3A22','#B5651D','#1A1A1A','#8A8A8A'];
 
-var G,KST={meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null};
+var G,KST={meat:null,meatN:0,ing:{},sauce:null,drink:null,fill:0,stage:'build',toast:0};
 var view='hall';
 function K(){return window.Kitchen;}
 var anim=0;
 
 function newGame(){
-  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},gems:20,dev:false,
+  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},fridge:12,gems:20,dev:false,
     owned:{outfit_white:1,hat_chef:1,hat_none:1,look_misha:1,theme_brick:1},equip:{outfit:'white',hat:'chef',look:'misha',theme:'brick',waiter:false,cat:false},time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
 }
 /* ---------- save ---------- */
 /* Progress is saved between days: a reload mid-day restarts that day with the money it opened with. */
 var SAVE_KEY='shaverma-save-v1';
 function save(){
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT,
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT,fridge:G.fridge,
     gems:G.gems,dev:G.dev,owned:G.owned,equip:G.equip}));}catch(e){}
 }
 function loadSave(){
@@ -295,6 +301,7 @@ function applySave(s){
   if(typeof s.courierT==='number')G.courierT=clamp(s.courierT,0,COURIER_EVERY);
   if(s.perks)for(var k in G.perks)G.perks[k]=s.perks[k]?1:0;
   if(typeof s.gems==='number')G.gems=Math.max(0,s.gems|0);
+  if(typeof s.fridge==='number')G.fridge=clamp(s.fridge|0,0,60);
   G.dev=!!s.dev;
   if(s.owned)for(var o in s.owned)G.owned[o]=1;
   if(s.equip)for(var q in G.equip)if(q in s.equip)G.equip[q]=s.equip[q];
@@ -406,6 +413,8 @@ var UPG=[
     max:function(){return G.comfort>=3;},lvl:function(){return G.comfort+' из 3';},cost:function(){return 700+G.comfort*500;},buy:function(){G.comfort++;}},
   {id:'sign',name:'Яркая вывеска',desc:'Гости приходят чаще.',
     max:function(){return G.sign>=3;},lvl:function(){return G.sign+' из 3';},cost:function(){return 800+G.sign*600;},buy:function(){G.sign++;}},
+  {id:'fridge',name:'Пополнить холодильник',desc:'+'+FRIDGE_REFILL+' бутылок. Гости берут сами, '+FRIDGE_PRICE+' ₽ за штуку.',
+    max:function(){return G.fridge>=40;},lvl:function(){return 'сейчас '+G.fridge+' шт.';},cost:function(){return FRIDGE_REFILL_COST;},buy:function(){G.fridge=Math.min(60,G.fridge+FRIDGE_REFILL);}},
   perk('knife','Острый нож','Один взмах срезает сразу две порции мяса.',900),
   perk('grill','Мощный гриль','Шаверма жарится на 40% быстрее.',1000),
   perk('pour','Быстрый кран','Напитки наливаются вдвое быстрее.',700)
@@ -446,7 +455,7 @@ function startDay(){
   G.stats={served:0,lost:0,earned:0};
   G.tut=G.day===1&&!tutorialDone()?{}:null;
   resetBuild();setView('hall');updateTicket();msg('');hud();hideOv();
-  if(G.tut)spawn({meat:'chicken',sauce:'garlic',onion:true,drink:null});
+  if(G.tut)spawn(orderOf(RECIPES[0],null));
 }
 /* guests wait about a minute and a half (a bit less on later days); sofas add 20% each */
 function maxPatience(){return Math.max(60,95-Math.min(G.day,10)*3.5)*(1+0.2*G.comfort);}
@@ -463,13 +472,16 @@ function spawn(fixedOrder){
   var seat={x:TABLES[t][0]-38,y:TABLES[t][1]+4};
   var lane=seat.x-32;
   var mp=maxPatience();
+  var fridge=!G.tut&&G.fridge>0&&Math.random()<0.35;
   var c={
     x:DOOR.x,y:DOOR.y,table:t,seat:seat,lane:lane,state:'enter',
-    path:[{x:lane,y:348},{x:lane,y:seat.y},{x:seat.x,y:seat.y}],
+    path:(fridge?[{x:FRIDGE_SPOT.x,y:348},{x:FRIDGE_SPOT.x,y:FRIDGE_SPOT.y,pause:1.8,fridge:true},{x:FRIDGE_SPOT.x,y:348}]:[])
+      .concat([{x:lane,y:348},{x:lane,y:seat.y},{x:seat.x,y:seat.y}]),
     order:fixedOrder||randomOrder(.45),
     patience:mp,maxP:mp,eatT:0,pay:0,moving:true,
     skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:SHIRT[Math.floor(Math.random()*SHIRT.length)],hair:HAIR[Math.floor(Math.random()*HAIR.length)]
   };
+  if(fridge)c.order.drink=null;   /* already has a bottle from the fridge */
   G.cust.push(c);
   return true;
 }
@@ -478,15 +490,30 @@ function spawnCourier(){
   G.cust.push({
     courier:true,x:DOOR.x,y:DOOR.y,table:-1,seat:{x:COURIER_SPOT.x,y:COURIER_SPOT.y},lane:COURIER_SPOT.x,state:'enter',
     path:[{x:COURIER_SPOT.x,y:348},{x:COURIER_SPOT.x,y:COURIER_SPOT.y}],
-    order:{meat:Math.random()<.5?'chicken':'beef',sauce:SAUCE_KEYS[Math.floor(Math.random()*3)],onion:Math.random()<.6,
-      drink:Math.random()<.5?DRINK_KEYS[Math.floor(Math.random()*3)]:null},
+    order:randomOrder(.5),
     patience:mp,maxP:mp,eatT:0,pay:0,moving:true,bagOpen:0,
     skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:COURIER_COLOR,hair:HAIR[Math.floor(Math.random()*HAIR.length)]
   });
 }
+/* ---------- ten shawarmas; new ones unlock day by day (all of them in developer mode) ---------- */
+var RECIPES=[
+  {id:'classic',name:'Классическая',meat:'chicken',meatN:3,sauce:'garlic',ing:['tomato','cucumber','onion'],price:250,day:1},
+  {id:'beef',name:'Говяжья',meat:'beef',meatN:3,sauce:'garlic',ing:['tomato','cucumber','onion'],price:270,day:1},
+  {id:'spicy',name:'Острая',meat:'chicken',meatN:3,sauce:'spicy',ing:['tomato','cucumber','jalapeno'],price:270,day:2},
+  {id:'cheesy',name:'Сырная',meat:'chicken',meatN:3,sauce:'cheese',ing:['tomato','cheese'],price:280,day:2},
+  {id:'fries',name:'С картошкой',meat:'chicken',meatN:3,sauce:'garlic',ing:['fries','tomato','cucumber'],price:290,day:3},
+  {id:'korean',name:'По-корейски',meat:'beef',meatN:3,sauce:'spicy',ing:['carrot','cucumber','greens'],price:290,day:3},
+  {id:'village',name:'Деревенская',meat:'beef',meatN:3,sauce:'garlic',ing:['pickle','cabbage','onion'],price:290,day:4},
+  {id:'veggie',name:'Овощная',meat:null,meatN:0,sauce:'garlic',ing:['tomato','cucumber','cabbage','carrot','greens'],price:220,day:4},
+  {id:'mexican',name:'Мексиканская',meat:'beef',meatN:3,sauce:'spicy',ing:['jalapeno','cheese','tomato'],price:300,day:5},
+  {id:'xl',name:'XL Мега',meat:'chicken',meatN:6,sauce:'garlic',ing:['tomato','cucumber','fries','cheese'],price:380,day:5}
+];
+var ING={tomato:'помидор',cucumber:'огурец',onion:'лук',cabbage:'капуста',carrot:'морковь по-корейски',fries:'картошка фри',cheese:'сыр',jalapeno:'халапеньо',pickle:'солёный огурец',greens:'зелень'};
+function unlockedRecipes(){return RECIPES.filter(function(r){return G.dev||G.day>=r.day;});}
+function orderOf(r,drink){return {recipe:r.id,name:r.name,meat:r.meat,meatN:r.meatN,sauce:r.sauce,ing:r.ing.slice(),price:r.price,drink:drink||null};}
 function randomOrder(drinkChance){
-  return {meat:Math.random()<.5?'chicken':'beef',sauce:SAUCE_KEYS[Math.floor(Math.random()*3)],onion:Math.random()<.6,
-    drink:Math.random()<drinkChance?DRINK_KEYS[Math.floor(Math.random()*3)]:null};
+  var list=unlockedRecipes(),r=list[Math.floor(Math.random()*list.length)];
+  return orderOf(r,Math.random()<drinkChance?DRINK_KEYS[Math.floor(Math.random()*3)]:null);
 }
 
 /* ---------- tutorial: day 1 for a new player is one patient guest and a coach walking through each step ---------- */
@@ -512,9 +539,9 @@ function tutorialStep(){
   if(KST.stage==='grill')return KST.toast<(K()?K().TOAST_OK:0.55)?'Шаверма жарится. Ждём, пока станет золотистой…':'Золотистая! Нажмите «Подать».';
   if(KST.meat&&KST.meat!=='chicken')return 'Гость просил курицу. Нажмите «Сбросить» и срежьте с левого вертела.';
   if(KST.meatN<3)return 'Ведите пальцем вверх-вниз по левому вертелу с курицей — нож будет срезать мясо. Нужно 3 порции.';
-  if(!KST.tomato)return 'Нажмите на миску с помидорами.';
-  if(!KST.cucumber)return 'Теперь огурцы.';
-  if(!KST.onion)return 'Гость просил с луком — нажмите на миску с луком.';
+  if(!KST.ing.tomato)return 'Нажмите на лоток с помидорами — справа от доски.';
+  if(!KST.ing.cucumber)return 'Теперь огурцы.';
+  if(!KST.ing.onion)return 'И лук — в «Классической» он тоже есть. Что входит в заказ, видно справа.';
   if(KST.sauce!=='garlic')return KST.sauce?'Нужен чесночный соус. Нажмите «Сбросить» и соберите заново.':'Полейте чесночным соусом — белая бутылка.';
   return 'Всё по заказу! Нажмите «Завернуть» — шаверма ляжет на гриль.';
 }
@@ -522,7 +549,7 @@ function moveAlong(c,dt){
   var left=95*dt;
   while(left>0&&c.path.length){
     var t=c.path[0],dx=t.x-c.x,dy=t.y-c.y,d=Math.hypot(dx,dy);
-    if(d<=left){c.x=t.x;c.y=t.y;c.path.shift();left-=d;}
+    if(d<=left){c.x=t.x;c.y=t.y;c.path.shift();left-=d;if(t.pause){c.pauseT=t.pause;c.atFridge=!!t.fridge;return false;}}
     else{c.x+=dx/d*left;c.y+=dy/d*left;left=0;}
   }
   return c.path.length===0;
@@ -554,7 +581,16 @@ function update(dt){
     if(G.courierT>=COURIER_EVERY&&!G.cust.some(function(c){return c.courier;})){G.courierT=0;spawnCourier();}
   }
   G.cust.slice().forEach(function(c){
-    if(c.state==='enter'){
+    if(c.state==='enter'&&c.pauseT>0){
+      c.moving=false;c.pauseT-=dt;
+      if(c.atFridge&&!c.bottle&&c.pauseT<1.0){
+        if(G.fridge>0){
+          G.fridge--;c.bottle=FRIDGE_DRINKS[Math.floor(Math.random()*FRIDGE_DRINKS.length)];
+          G.money+=FRIDGE_PRICE;G.stats.earned+=FRIDGE_PRICE;sfx('coin');float(c.x,c.y-60,c.bottle.n+' +'+FRIDGE_PRICE+' ₽','#7FD3FF');hud();
+        }else c.bottle={n:'',c:'',none:true};
+      }
+      if(c.pauseT<=0){c.pauseT=0;c.moving=true;}
+    }else if(c.state==='enter'){
       if(moveAlong(c,dt)){c.state='wait';c.moving=false;sfx('order');
         say(c.courier?'Привет, Мчим Еда! Сейчас соберу заказ.':HELLO[Math.floor(Math.random()*HELLO.length)]);if(!G.sel){G.sel=c;updateTicket();}}
     }else if(c.state==='wait'){
@@ -593,39 +629,35 @@ function update(dt){
 }
 
 /* ---------- builder (the 3D kitchen owns the lavash; this mirrors its state) ---------- */
-var VEG_NAMES={tomato:'Помидоры',cucumber:'Огурцы',onion:'Лук'};
-function resetBuild(){if(K())K().reset();else window.onKitchenChange({meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null});}
+function resetBuild(){if(K())K().reset();else window.onKitchenChange({meat:null,meatN:0,ing:{},sauce:null,drink:null,fill:0,stage:'build',toast:0});}
 window.onKitchenChange=function(st){KST=st;renderBuild();};
 /* The panel is a checklist: what the selected guest ordered, and whether the lavash matches yet.
    ✓ done, ✗ wrong, · still to do. With no guest selected it just lists what is on the lavash. */
 function renderBuild(){
-  var need=K()?K().MEAT_NEED:3,c=G&&G.sel&&G.sel.state==='wait'?G.sel:null,o=c&&c.order;
+  var c=G&&G.sel&&G.sel.state==='wait'?G.sel:null,o=c&&c.order,ingNow=KST.ing||{};
   var meatNow=KST.meat==='mixed'?'смешали':KST.meat?MEAT[KST.meat].name.toLowerCase():'';
   function st(ok,wrong){return wrong?'bad':ok?'ok':'';}
-  var rows;
+  function cap(t){return t[0].toUpperCase()+t.slice(1);}
+  var rows=[];
   if(o){
-    var meatWrong=KST.meatN>0&&KST.meat!==o.meat;
-    rows=[
-      ['Мясо: '+MEAT[o.meat].name.toLowerCase(),meatWrong?meatNow:Math.min(KST.meatN,need)+'/'+need,st(!meatWrong&&KST.meatN>=need,meatWrong)],
-      ['Помидоры','',st(KST.tomato)],
-      ['Огурцы','',st(KST.cucumber)],
-      [o.onion?'С луком':'Без лука','',o.onion?st(KST.onion):(KST.onion?'bad':'ok')],
-      ['Соус: '+SAUCE[o.sauce].name.toLowerCase(),KST.sauce&&KST.sauce!==o.sauce?(KST.sauce==='mixed'?'смешали':SAUCE[KST.sauce].name.toLowerCase()):'',st(KST.sauce===o.sauce,KST.sauce&&KST.sauce!==o.sauce)]
-    ];
+    if(o.meat){
+      var meatWrong=KST.meatN>0&&KST.meat!==o.meat;
+      rows.push(['Мясо: '+MEAT[o.meat].name.toLowerCase(),meatWrong?meatNow:Math.min(KST.meatN,o.meatN)+'/'+o.meatN,st(!meatWrong&&KST.meatN>=o.meatN,meatWrong)]);
+    }else rows.push(['Без мяса',KST.meatN?'положили мясо':'',KST.meatN?'bad':'ok']);
+    o.ing.forEach(function(k){rows.push([cap(ING[k]),'',st(ingNow[k])]);});
+    Object.keys(ingNow).forEach(function(k){if(ingNow[k]&&o.ing.indexOf(k)<0)rows.push(['Лишнее: '+ING[k],'','bad']);});
+    rows.push(['Соус: '+SAUCE[o.sauce].name.toLowerCase(),KST.sauce&&KST.sauce!==o.sauce?(KST.sauce==='mixed'?'смешали':SAUCE[KST.sauce].name.toLowerCase()):'',st(KST.sauce===o.sauce,KST.sauce&&KST.sauce!==o.sauce)]);
     if(o.drink){
       var dWrong=KST.drink&&KST.drink!==o.drink,over=KST.fill>(K()?K().FILL_MAX:1.02);
       rows.push(['Напиток: '+DRINK[o.drink].name.toLowerCase(),dWrong?(KST.drink==='mixed'?'смешали':DRINK[KST.drink].name.toLowerCase()):(KST.drink?(over?'перелили':Math.round(Math.min(KST.fill,1)*100)+'%'):''),
         st(!dWrong&&!over&&KST.fill>=(K()?K().FILL_OK:0.7),dWrong||over)]);
     }
   }else{
-    rows=[
-      ['Мясо',KST.meatN?meatNow+' '+Math.min(KST.meatN,need)+'/'+need:'—',KST.meatN?'on':''],
-      ['Помидоры',KST.tomato?'есть':'—',KST.tomato?'on':''],
-      ['Огурцы',KST.cucumber?'есть':'—',KST.cucumber?'on':''],
-      ['Лук',KST.onion?'есть':'—',KST.onion?'on':''],
-      ['Соус',KST.sauce==='mixed'?'смешали':KST.sauce?SAUCE[KST.sauce].name:'—',KST.sauce?'on':''],
-      ['Напиток',KST.drink==='mixed'?'смешали':KST.drink?DRINK[KST.drink].name+' '+Math.round(Math.min(KST.fill,1)*100)+'%':'—',KST.drink?'on':'']
-    ];
+    rows.push(['Мясо',KST.meatN?meatNow+' ×'+KST.meatN:'—',KST.meatN?'on':'']);
+    var have=Object.keys(ingNow).filter(function(k){return ingNow[k];});
+    rows.push(['Начинка',have.length?have.map(function(k){return ING[k];}).join(', '):'—',have.length?'on':'']);
+    rows.push(['Соус',KST.sauce==='mixed'?'смешали':KST.sauce?SAUCE[KST.sauce].name:'—',KST.sauce?'on':'']);
+    rows.push(['Напиток',KST.drink==='mixed'?'смешали':KST.drink?DRINK[KST.drink].name+' '+Math.round(Math.min(KST.fill,1)*100)+'%':'—',KST.drink?'on':'']);
   }
   if(K()&&KST.stage!=='build'){
     var lbl=KST.stage==='rolling'?'заворачиваем':K().toastLabel(KST.toast);
@@ -635,7 +667,7 @@ function renderBuild(){
   document.getElementById('bl').innerHTML=rows.map(function(r){
     return '<li class="'+r[2]+'"><span>'+r[0]+'</span><span>'+(r[1]?r[1]+' ':'')+(o?'<b>'+mark[r[2]]+'</b>':'')+'</span></li>';
   }).join('');
-  document.getElementById('blLbl').textContent=o?(c.courier?'Заказ курьера':'Заказ стола '+(c.table+1)):'На лаваше';
+  document.getElementById('blLbl').textContent=o?(c.courier?'Курьер':'Стол '+(c.table+1))+': «'+o.name+'»':'На лаваше';
   document.getElementById('serve').textContent=K()&&KST.stage==='build'?'Завернуть':'Подать';
 }
 function setView(v){
@@ -657,7 +689,7 @@ function syncMute(){var m=window.Sfx&&Sfx.muted;muteBtn.textContent=m?'🔇':'�
 muteBtn.onclick=function(){if(window.Sfx){Sfx.muted=!Sfx.muted;syncMute();}};syncMute();
 document.addEventListener('kitchenready',function(){cv.hidden=true;K().start();setView(view);syncPerks();renderBuild();});
 function orderText(o){
-  return MEAT[o.meat].name+', '+SAUCE[o.sauce].name.toLowerCase()+' соус, '+(o.onion?'с луком':'без лука')+(o.drink?' + '+DRINK[o.drink].name.toLowerCase():'');
+  return '«'+o.name+'»'+(o.drink?' + '+DRINK[o.drink].name.toLowerCase():'');
 }
 function updateTicket(){
   var el=document.getElementById('tkText');
@@ -672,16 +704,17 @@ document.getElementById('serve').onclick=function(){
   var c=G.sel;
   if(!c||c.state!=='wait'){msg('Сначала выберите гостя с заказом.');return;}
   if(K()&&KST.stage==='rolling')return;
-  if(!KST.meatN){msg('Срежьте мясо с вертела.');setView('kitchen');return;}
+  if(c.order.meat&&!KST.meatN){msg('Срежьте мясо с вертела.');setView('kitchen');return;}
   if(!KST.sauce){msg('Полейте соусом.');setView('kitchen');return;}
   /* step 1: wrap it and put it on the grill */
   if(K()&&KST.stage==='build'){K().roll();sfx('click');msg('На гриле. Подайте, когда станет золотистой.');return;}
-  var bad=[];
-  if(KST.meat!==c.order.meat)bad.push('мясо');
-  else if(KST.meatN<(K()?K().MEAT_NEED:3))bad.push('мало мяса');
-  if(!KST.tomato||!KST.cucumber)bad.push('овощи');
-  if(KST.onion!==c.order.onion)bad.push('лук');
-  if(KST.sauce!==c.order.sauce)bad.push('соус');
+  var bad=[],o=c.order,ingNow=KST.ing||{};
+  if(o.meat){if(KST.meat!==o.meat)bad.push('мясо');else if(KST.meatN<o.meatN)bad.push('мало мяса');}
+  else if(KST.meatN)bad.push('мясо не просили');
+  var miss=o.ing.filter(function(k){return !ingNow[k];}),extra=Object.keys(ingNow).filter(function(k){return ingNow[k]&&o.ing.indexOf(k)<0;});
+  if(miss.length)bad.push('нет: '+miss.map(function(k){return ING[k];}).join(', '));
+  if(extra.length)bad.push('лишнее: '+extra.map(function(k){return ING[k];}).join(', '));
+  if(KST.sauce!==o.sauce)bad.push('соус');
   if(c.order.drink){
     if(!KST.drink){msg('Налейте '+DRINK[c.order.drink].name.toLowerCase()+'.');setView('kitchen');return;}
     if(KST.drink!==c.order.drink)bad.push('напиток');
@@ -695,7 +728,7 @@ document.getElementById('serve').onclick=function(){
     else if(KST.toast<=K().TOAST_MAX)crisp=30;   /* golden and crispy: bonus tip */
   }
   var tip=Math.round(100*(c.patience/c.maxP))+crisp;
-  c.pay=Math.max(100,250+tip-80*bad.length)+(c.order.drink?DRINK_PRICE:0)+(c.courier?COURIER_BONUS:0);
+  c.pay=Math.max(100,c.order.price+tip-80*bad.length)+(c.order.drink?DRINK_PRICE:0)+(c.courier?COURIER_BONUS:0);
   c.state='eat';c.eatT=c.courier?1.2:3.5;   /* a courier just packs the order and goes */
   G.stats.served++;
   if(bad.length){
@@ -809,7 +842,7 @@ function drawPlate(c){
   ctx.fillStyle='#F8F4EA';ctx.beginPath();ctx.ellipse(x-6,y+4,15,9,0,0,Math.PI*2);ctx.fill();
   if(wrapImg.complete&&wrapImg.naturalWidth){ctx.drawImage(wrapImg,x-15,y-30,18,48);return;}
   ctx.fillStyle='#D9B27A';rr(ctx,x-16,y-5,20,9,4);ctx.fill();
-  ctx.fillStyle=MEAT[c.order.meat].c;rr(ctx,x-13,y-3,14,3,1.5);ctx.fill();
+  ctx.fillStyle=c.order.meat?MEAT[c.order.meat].c:'#7FB04A';rr(ctx,x-13,y-3,14,3,1.5);ctx.fill();
 }
 /* delivery thermo-bag: yellow cube, the lid swings up while the courier waits */
 function drawBag(x,y,open){
@@ -850,11 +883,11 @@ function drawBubble(c){
   ctx.fillStyle='#FFF6E0';ctx.strokeStyle=sel?'#F2A93B':'#2B1D14';ctx.lineWidth=sel?3:1.5;
   rr(ctx,bx,by,w,h,8);ctx.fill();ctx.stroke();
   ctx.beginPath();ctx.moveTo(c.x-5,by+h);ctx.lineTo(c.x+5,by+h);ctx.lineTo(c.x,by+h+6);ctx.closePath();ctx.fillStyle='#FFF6E0';ctx.fill();ctx.stroke();
-  ctx.fillStyle=MEAT[c.order.meat].c;ctx.beginPath();ctx.arc(bx+12,by+17,7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=c.order.meat?MEAT[c.order.meat].c:'#7FB04A';ctx.beginPath();ctx.arc(bx+12,by+17,7,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;ctx.stroke();
   ctx.fillStyle=SAUCE[c.order.sauce].c;rr(ctx,bx+23,by+10,12,14,3);ctx.fill();ctx.stroke();
   ctx.strokeStyle='#9B6BB8';ctx.lineWidth=2;ctx.beginPath();ctx.arc(bx+44,by+17,5,0,Math.PI*2);ctx.stroke();
-  if(!c.order.onion){ctx.strokeStyle='#D8432B';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bx+38,by+25);ctx.lineTo(bx+50,by+9);ctx.stroke();}
+  if(c.order.ing.indexOf('onion')<0){ctx.strokeStyle='#D8432B';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bx+38,by+25);ctx.lineTo(bx+50,by+9);ctx.stroke();}
   if(c.order.drink){
     ctx.fillStyle=DRINK[c.order.drink].c;ctx.strokeStyle='#2B1D14';ctx.lineWidth=1.2;
     ctx.beginPath();ctx.moveTo(bx+55,by+9);ctx.lineTo(bx+66,by+9);ctx.lineTo(bx+64,by+26);ctx.lineTo(bx+57,by+26);ctx.closePath();ctx.fill();ctx.stroke();

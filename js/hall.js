@@ -101,6 +101,36 @@ loadPH('potted_plant_01',1.8,'potted_plant_01_lo').then(m=>{
 });
 loadPH('CashRegister_01',1.1).then(m=>{if(!m)return;m.position.set(3.9,0.12,5.55);m.rotation.y=Math.PI;scene.add(m);});
 
+/* ---------- self-service drinks fridge against the right wall ---------- */
+const FRIDGE_POS=new THREE.Vector3(RIGHT_WALL-0.75,FLOOR_Y,Z(200));
+const fridgeBottles=[];
+{
+  const g=new THREE.Group();g.position.copy(FRIDGE_POS);g.rotation.y=-Math.PI/2;hall.add(g);
+  const shellMat=new THREE.MeshStandardMaterial({color:'#c8201c',roughness:0.5,metalness:0.2});
+  const back=mesh(new THREE.BoxGeometry(2.4,6.2,0.12),shellMat);back.position.set(0,3.1,-0.6);g.add(back);
+  for(const x of [-1.2,1.2]){const sd=mesh(new THREE.BoxGeometry(0.12,6.2,1.3),shellMat);sd.position.set(x,3.1,0);g.add(sd);}
+  const top=mesh(new THREE.BoxGeometry(2.5,0.9,1.3),shellMat);top.position.set(0,6.6,0);g.add(top);
+  const bottom=mesh(new THREE.BoxGeometry(2.5,0.4,1.3),shellMat);bottom.position.set(0,0.2,0);g.add(bottom);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.6),new THREE.MeshBasicMaterial({map:(()=>{const c=document.createElement('canvas');c.width=512;c.height=140;const x=c.getContext('2d');
+    x.fillStyle='#c8201c';x.fillRect(0,0,512,140);x.fillStyle='#fff';x.font='800 64px Onest,Arial,sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('НАПИТКИ',256,74);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;})(),toneMapped:false}));
+  sign.position.set(0,6.6,0.66);g.add(sign);
+  const inner=new THREE.Mesh(new THREE.PlaneGeometry(2.3,5.6),new THREE.MeshBasicMaterial({color:'#eaf6ff'}));inner.position.set(0,3.2,-0.53);g.add(inner);
+  const colors=['#2a0f06','#f4e04d','#3fbf3f','#bfe6ff','#ff9a1f','#f3efe4','#a3123a'];
+  for(let shelf=0;shelf<4;shelf++){
+    const sh=mesh(new THREE.BoxGeometry(2.25,0.05,1.0),M.steel);sh.position.set(0,0.9+shelf*1.35,-0.05);g.add(sh);
+    for(let k=0;k<6;k++){
+      const c=colors[(shelf*6+k)%colors.length];
+      const b=mesh(new THREE.CylinderGeometry(0.11,0.13,0.62,10),new THREE.MeshPhysicalMaterial({color:c,roughness:0.15,clearcoat:1,transparent:true,opacity:0.92}));
+      b.position.set(-0.9+k*0.36,0.9+shelf*1.35+0.34,-0.1);g.add(b);fridgeBottles.push(b);
+    }
+  }
+  const door=new THREE.Mesh(new THREE.PlaneGeometry(2.3,5.7),new THREE.MeshPhysicalMaterial({color:'#dff3ff',roughness:0.05,transparent:true,opacity:0.18,depthWrite:false}));
+  door.position.set(0,3.25,0.62);g.add(door);
+  const handle=mesh(new THREE.BoxGeometry(0.08,1.6,0.08),M.steel);handle.position.set(0.95,3.2,0.7);g.add(handle);
+}
+const handBottleGeo=new THREE.CylinderGeometry(0.1,0.12,0.55,10);
+
 /* ---------- glass serving counter: guests look through it into the kitchen ---------- */
 {
   const x0=-7.2,x1=5.0,z0=4.9,z1=6.3,w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
@@ -236,11 +266,12 @@ function makeCourier(c){
 /* ---------- bubbles & floating text (DOM, so they stay crisp) ---------- */
 const layer=document.createElement('div');layer.className='bubbles';root.appendChild(layer);
 const DRINK_C={tea:'#9A4A1C',ayran:'#F3EFE4',cola:'#2A0F06'},MEAT_C={chicken:'#E6B04F',beef:'#8A3B22'},SAUCE_C={garlic:'#FFF1CF',spicy:'#D8432B',cheese:'#F2C23B'};
+const ING_C={tomato:'#d4321f',cucumber:'#3f7a2a',onion:'#c9a2d8',cabbage:'#e3ecbd',carrot:'#f0761c',fries:'#f2c14e',cheese:'#f5d76e',jalapeno:'#2f8a22',pickle:'#55702f',greens:'#3f9a3a'};
 function icons(o){
-  return '<span class="ic">'+
-    '<i class="dot" style="background:'+MEAT_C[o.meat]+'"></i>'+
+  return '<span class="nm">'+o.name+'</span><span class="ic">'+
+    (o.meat?'<i class="dot" style="background:'+MEAT_C[o.meat]+'"></i>':'')+
+    o.ing.map(k=>'<i class="mini" style="background:'+ING_C[k]+'"></i>').join('')+
     '<i class="sq" style="background:'+SAUCE_C[o.sauce]+'"></i>'+
-    '<i class="ring'+(o.onion?'':' no')+'"></i>'+
     (o.drink?'<i class="cup" style="background:'+DRINK_C[o.drink]+'"></i>':'')+
     '</span>';
 }
@@ -303,6 +334,7 @@ hooks.push((dt,t)=>{
     cookG.rotation.y=walking?(dx>0?Math.PI/2:-Math.PI/2):Math.PI;
   }
   tables.forEach((tb,i)=>{tb.visible=i<G.tables;});
+  fridgeBottles.forEach((b,i)=>{b.visible=i<(G.fridge||0);});
   comfortBits.forEach((bits,lvl)=>bits.forEach(b=>{b.visible=G.comfort>lvl;}));
   signs.forEach((m,i)=>{m.visible=G.sign>i;if(m.visible)m.material.opacity=0.85+0.15*Math.sin(t*(i===2?9:3)+i*2)*(Math.random()<0.02?3:1);});
   const seen=new Set();
@@ -331,6 +363,11 @@ hooks.push((dt,t)=>{
       u.armR.rotation.x=c.state==='eat'?-1.2+Math.sin(t*4)*0.35:(seated?-0.5:sw*0.8);
       u.body.position.y=moving?Math.abs(Math.sin(u.phase))*0.08:0;
     }else if(u.body){u.body.position.y=moving?Math.abs(Math.sin(t*9))*0.12:0;u.body.rotation.z=moving?Math.sin(t*9)*0.04:0;}
+    /* a bottle from the fridge, held in the hand from then on */
+    if(c.bottle&&!c.bottle.none&&!u.bottle&&u.armR){
+      u.bottle=mesh(handBottleGeo,new THREE.MeshPhysicalMaterial({color:c.bottle.c,roughness:0.15,clearcoat:1}));
+      u.bottle.position.set(0,-1.35,0.15);u.armR.add(u.bottle);
+    }
     if(u.bag){
       const waiting=c.state==='wait'||c.state==='eat';
       u.bag.visible=waiting;

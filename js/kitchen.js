@@ -217,40 +217,46 @@ const lg=new THREE.CircleGeometry(1.35,72);lg.rotateX(-Math.PI/2);
 const lav=mesh(lg,M.lavash);lav.scale.set(1.15,1,0.95);lavash.add(lav);
 const fill=new THREE.Group();lavash.add(fill);
 
-/* ---------- bowls ---------- */
-const bowls={};
-function bowlGeometry(){
-  const pts=[[0,0],[0.42,0],[0.55,0.06],[0.66,0.32],[0.7,0.4],[0.64,0.4],[0.6,0.33],[0.5,0.1],[0,0.1]].map(p=>new THREE.Vector2(p[0],p[1]));
-  return new THREE.LatheGeometry(pts,40);
-}
-const pieceGeo={
-  tomato:new THREE.BoxGeometry(0.15,0.1,0.14),
-  cucumber:new THREE.CylinderGeometry(0.1,0.1,0.04,18),
-  onion:new THREE.TorusGeometry(0.085,0.02,8,22)
+/* ---------- bain-marie: a steel insert with ten trays of toppings, like a real shawarma counter ---------- */
+const INGREDIENTS={
+  tomato:'ПОМИДОР',cucumber:'ОГУРЕЦ',onion:'ЛУК',cabbage:'КАПУСТА',carrot:'МОРКОВЬ',
+  fries:'ФРИ',cheese:'СЫР',jalapeno:'ХАЛАПЕНЬО',pickle:'СОЛ. ОГУРЕЦ',greens:'ЗЕЛЕНЬ'
+};
+const ING_KEYS=Object.keys(INGREDIENTS);
+const IM=(c,r=0.5)=>new THREE.MeshPhysicalMaterial({color:c,roughness:r,clearcoat:0.3});
+const pieceDef={
+  tomato:[new THREE.BoxGeometry(0.15,0.1,0.14),M.tomato],
+  cucumber:[new THREE.CylinderGeometry(0.1,0.1,0.04,16),[M.cucSide,M.cucFace,M.cucFace]],
+  onion:[new THREE.TorusGeometry(0.085,0.02,8,20),M.onion,true],
+  cabbage:[new THREE.BoxGeometry(0.24,0.015,0.05),IM('#e3ecbd',0.6)],
+  carrot:[new THREE.BoxGeometry(0.3,0.025,0.025),IM('#f0761c',0.4)],
+  fries:[new THREE.BoxGeometry(0.32,0.055,0.055),IM('#f2c14e',0.6)],
+  cheese:[new THREE.BoxGeometry(0.07,0.035,0.05),IM('#f5d76e',0.45)],
+  jalapeno:[new THREE.TorusGeometry(0.055,0.02,8,16),IM('#3f8f2a',0.35),true],
+  pickle:[new THREE.CylinderGeometry(0.11,0.11,0.035,16),[IM('#55702f'),IM('#a6bb6c'),IM('#a6bb6c')]],
+  greens:[new THREE.BoxGeometry(0.13,0.012,0.06),IM('#3f9a3a',0.6)]
 };
 function piece(kind){
-  if(kind==='tomato')return mesh(pieceGeo.tomato,M.tomato);
-  if(kind==='cucumber')return mesh(pieceGeo.cucumber,[M.cucSide,M.cucFace,M.cucFace]);
-  const m=mesh(pieceGeo.onion,M.onion);m.rotation.x=Math.PI/2;return m;
+  const d=pieceDef[kind],m=mesh(d[0],d[1]);if(d[2])m.rotation.x=Math.PI/2;return m;
 }
-function makeBowl(kind,x,z,label){
-  const g=new THREE.Group();g.position.set(x,0,z);
-  const b=mesh(bowlGeometry(),M.ceramic);g.add(b);
-  const pile=new THREE.Group();g.add(pile);g.userData.shell=b;g.userData.pile=pile;
-  for(let i=0;i<26;i++){
-    const p=piece(kind),a=rnd(0,6.28),r=rnd(0,0.45);
-    p.position.set(Math.cos(a)*r,0.16+rnd(0,0.14)+(0.45-r)*0.25,Math.sin(a)*r);
-    p.rotation.set(p.rotation.x+rnd(-0.5,0.5),rnd(0,6.28),rnd(-0.4,0.4));pile.add(p);
-  }
-  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.24),new THREE.MeshBasicMaterial({map:labelTex(label,'#2b1d14','#f6e7c8')}));
-  lbl.position.set(0,0.01,0.9);lbl.rotation.x=-Math.PI/2;g.add(lbl);
-  g.userData.act={type:'veg',kind};targets.push(g);
-  scene.add(g);bowls[kind]=g;
+const bowls={};   /* kind -> tray group (name kept from the old bowls) */
+{
+  const cols=5,dx=0.8,x0=2.9,rows=[1.5,0.62];
+  const frame=mesh(new THREE.BoxGeometry(cols*dx+0.25,0.1,rows[0]-rows[1]+1.05),M.steel);
+  frame.position.set(x0+(cols-1)*dx/2,0.02,(rows[0]+rows[1])/2);scene.add(frame);
+  ING_KEYS.forEach((kind,i)=>{
+    const g=new THREE.Group();g.position.set(x0+(i%cols)*dx,0,rows[Math.floor(i/cols)]);
+    const tray=mesh(new THREE.BoxGeometry(0.76,0.16,0.8),M.darkSteel);tray.position.y=0.06;g.add(tray);
+    const rim=mesh(new THREE.BoxGeometry(0.78,0.03,0.82),M.steel);rim.position.y=0.14;g.add(rim);
+    for(let k=0;k<18;k++){
+      const p=piece(kind);p.position.set(rnd(-0.28,0.28),0.16+rnd(0,0.08),rnd(-0.28,0.28));
+      p.rotation.set(p.rotation.x+rnd(-0.4,0.4),rnd(0,6.28),rnd(-0.3,0.3));g.add(p);
+    }
+    const tag=new THREE.Mesh(new THREE.PlaneGeometry(0.74,0.2),new THREE.MeshBasicMaterial({map:labelTex(INGREDIENTS[kind],'#2b1d14','#f6e7c8')}));
+    tag.position.set(0,0.36,-0.4);tag.rotation.x=-0.35;g.add(tag);
+    g.userData.act={type:'veg',kind};targets.push(g);scene.add(g);bowls[kind]=g;
+  });
 }
-/* vegetables sit in the front row so they are easy to see and reach; sauces stand behind them */
-makeBowl('onion',3.2,0.95,'ЛУК');
-makeBowl('tomato',4.6,0.95,'ПОМИДОРЫ');
-makeBowl('cucumber',6.0,0.95,'ОГУРЦЫ');
 
 /* ---------- sauce bottles ---------- */
 const bottles={};
@@ -396,13 +402,13 @@ function menuCanvas(g,w,h,title,rows){
   g.fillStyle=gr;g.fillRect(0,0,w,h);
   g.fillStyle='#ffd23a';g.font='800 58px Onest,Arial,sans-serif';g.textAlign='left';g.fillText(title,34,74);
   g.fillStyle='rgba(255,255,255,.25)';g.fillRect(34,92,w-68,3);
-  g.font='600 36px Onest,Arial,sans-serif';
-  rows.forEach((r,i)=>{const y=150+i*58;g.fillStyle='#ffffff';g.fillText(r[0],34,y);g.fillStyle='#ffd23a';g.textAlign='right';g.fillText(r[1],w-34,y);g.textAlign='left';});
+  g.font='600 33px Onest,Arial,sans-serif';
+  rows.forEach((r,i)=>{const y=146+i*56;g.fillStyle='#ffffff';g.fillText(r[0],34,y);g.fillStyle='#ffd23a';g.textAlign='right';g.fillText(r[1],w-34,y);g.textAlign='left';});
 }
 const BOARDS=[
-  {x:-4.6,title:'ШАВЕРМА',rows:[['С курицей','250 ₽'],['С говядиной','250 ₽'],['Острая','250 ₽'],['Сырная','250 ₽']],img:true},
-  {x:0.2,title:'НАПИТКИ',rows:[['Чай','60 ₽'],['Айран','60 ₽'],['Кола','60 ₽']]},
-  {x:5.0,title:'СОУСЫ',rows:[['Чесночный','0 ₽'],['Острый','0 ₽'],['Сырный','0 ₽']]}
+  {x:-4.6,title:'ШАВЕРМА',rows:[['Классическая','250 ₽'],['Говяжья','270 ₽'],['Острая','270 ₽'],['Сырная','280 ₽'],['С картошкой','290 ₽']]},
+  {x:0.2,title:'ШАВЕРМА',rows:[['По-корейски','290 ₽'],['Деревенская','290 ₽'],['Овощная','220 ₽'],['Мексиканская','300 ₽'],['XL Мега','380 ₽']]},
+  {x:5.0,title:'НАПИТКИ',rows:[['Чай','60 ₽'],['Айран','60 ₽'],['Кола','60 ₽'],['Из холодильника','80 ₽']]}
 ];
 for(const b of BOARDS){
   const t=canvasTex(640,400,(g,w,h)=>menuCanvas(g,w,h,b.title,b.rows));
@@ -423,10 +429,10 @@ const knife=new THREE.Group();
 knife.visible=false;scene.add(knife);
 
 /* ---------- state ---------- */
-function blank(){return {meat:null,meatN:0,tomato:false,cucumber:false,onion:false,sauce:null,drink:null,fill:0,stage:'build',toast:0};}
+function blank(){return {meat:null,meatN:0,ing:{},sauce:null,drink:null,fill:0,stage:'build',toast:0};}
 let order=null;   /* the selected guest's order, only used for hints */
 let state=blank();
-function changed(){updateHint();if(window.onKitchenChange)window.onKitchenChange(Object.assign({},state));}
+function changed(){updateHint();if(window.onKitchenChange)window.onKitchenChange(Object.assign({},state,{ing:Object.assign({},state.ing)}));}
 function updateHint(){
   let t;
   if(state.stage==='rolling'){hint.textContent='Заворачиваем…';return;}
@@ -434,10 +440,11 @@ function updateHint(){
     hint.textContent=order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK)?'Пока жарится, налейте '+DRINKS[order.drink].name.toLowerCase():
       (state.toast<TOAST_OK?'Жарим… ждём, пока станет золотистой':state.toast<=TOAST_MAX?'Золотистая! Нажмите «Подать»':state.toast<=TOAST_BURNT?'Подгорает! Скорее подавайте':'Сгорела… можно подать, но гость будет недоволен');return;
   }
-  if(!state.meatN)t='Ведите пальцем вверх-вниз по вертелу — нож срежет мясо';
-  else if(state.meatN<MEAT_NEED)t='Срежьте ещё '+(MEAT_NEED-state.meatN);
-  else if(!state.tomato||!state.cucumber)t='Добавьте помидоры и огурцы';
-  else if(!state.sauce)t='Лук, если просили, и соус';
+  const needMeat=order?order.meatN:MEAT_NEED,missing=order?order.ing.filter(k=>!state.ing[k]):[];
+  if(needMeat&&!state.meatN)t='Ведите пальцем вверх-вниз по вертелу — нож срежет мясо';
+  else if(state.meatN<needMeat)t='Срежьте ещё '+(needMeat-state.meatN);
+  else if(missing.length)t='Добавьте: '+missing.map(k=>INGREDIENTS[k].toLowerCase()).join(', ');
+  else if(!state.sauce)t='Полейте соусом';
   else if(state.fill>FILL_MAX)t='Перелили! Нажмите на стакан, чтобы вылить';
   else if(order&&order.drink&&(state.drink!==order.drink||state.fill<FILL_OK))t='Налейте '+DRINKS[order.drink].name.toLowerCase()+': держите палец на кувшине до зелёной черты';
   else t='Готово? Нажмите «Завернуть»';
@@ -479,7 +486,7 @@ function portion(sp){
   changed();
 }
 function addVeg(kind){
-  state[kind]=true;cook.x=bowls[kind].position.x;if(window.Sfx)Sfx.play('drop');
+  state.ing[kind]=true;cook.x=bowls[kind].position.x;if(window.Sfx)Sfx.play('drop');
   const from=bowls[kind].localToWorld(new THREE.Vector3(0,0.4,0));
   for(let i=0;i<6;i++){const p=piece(kind);p.rotation.y=rnd(0,6.28);fly(p,from,spot(0.8,0.35,0.13+rnd(0,0.05)),0.45+i*0.05,0.9);}
   changed();
@@ -612,13 +619,6 @@ loadModel('wooden_cutting_board',3.9).then(m=>{
   m.position.copy(board.position).setY(0);scene.add(m);board.visible=false;
   lavashY=m.userData.height+0.01;lavash.position.y=lavashY;
 });
-loadModel('wooden_bowl_01',1.5).then(m=>{
-  if(!m)return;
-  for(const k in bowls){
-    const g=bowls[k],c=m.clone();g.add(c);g.userData.shell.visible=false;
-    g.userData.pile.position.y=m.userData.height-0.3;
-  }
-});
 loadModel('yellow_onion',0.42).then(m=>{
   if(!m)return;
   [[2.75,-1.0,0.4],[2.6,-0.45,2.1]].forEach(([x,z,r])=>{const o=m.clone();o.position.set(x,0,z);o.rotation.y=r;scene.add(o);});
@@ -646,7 +646,7 @@ gltf.load('assets/models/sauce-bottle.glb',d=>{
 let visible=false;
 /* camera poses; the tabs fly between them */
 const VIEWS={
-  kitchen:{pos:new THREE.Vector3(0.4,6.4,10.6),look:new THREE.Vector3(0.4,1.0,-0.9),fov:38},
+  kitchen:{pos:new THREE.Vector3(0.6,6.4,10.6),look:new THREE.Vector3(0.6,1.0,-0.9),fov:38},
   hall:{pos:new THREE.Vector3(2.8,13,30),look:new THREE.Vector3(2.8,1.2,7.6),fov:44},
   /* portrait phones: steeper, closer, and allowed to crop the sides a little so the room fills the screen */
   hallTall:{pos:new THREE.Vector3(2.2,17.5,17.5),look:new THREE.Vector3(2.2,-1.5,5.6),fov:44,minAspect:0.85}
@@ -765,7 +765,8 @@ window.Kitchen={
   setPerks(p){Object.assign(perks,p);},
   FILL_OK,FILL_MAX,
   reset,roll:rollUp,take:takeOff,toastLabel,TOAST_OK,TOAST_MAX,TOAST_BURNT,
-  get state(){return Object.assign({},state);},
+  get state(){return Object.assign({},state,{ing:Object.assign({},state.ing)});},
+  INGREDIENTS,
   MEAT_NEED
 };
 updateHint();hint.hidden=true;
