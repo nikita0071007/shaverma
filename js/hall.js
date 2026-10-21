@@ -3,6 +3,7 @@
    Game logic still runs on the flat 640x400 hall coordinates in index.html (window.Game);
    this module maps those positions onto the 3D floor every frame. */
 import {THREE,scene,camera,root,hooks,gltf,texLoader,fitted,pbr,mesh,M,PH,cook} from './kitchen.js';
+import {clone as cloneSkinned} from '../vendor/utils/SkeletonUtils.js';
 
 const FLOOR_Y=-3;
 const SX=0.0326,SZ=0.045;
@@ -212,7 +213,7 @@ function applyTheme(id){
   pbr(t[0],t[1],brickMat,t[3]);brickMat.color.set(t[2]);
 }
 /* waiter: white shirt, black vest and bow tie; walks over to whoever has waited longest */
-const waiter=(()=>{
+let waiter=(()=>{
   const g=makeGuest({skin:'#F2C9A0',shirt:'#ffffff',hair:'#1A1A1A'}),B=g.userData.body,black=new THREE.MeshStandardMaterial({color:'#151515',roughness:0.6});
   const vest=mesh(new THREE.CapsuleGeometry(0.54,0.8,4,12),black);vest.scale.z=0.7;vest.position.y=2.95;B.add(vest);
   const bow=mesh(new THREE.BoxGeometry(0.3,0.1,0.06),black);bow.position.set(0,3.85,0.38);B.add(bow);
@@ -231,6 +232,56 @@ const cat=(()=>{
   g.userData.tail=tail;g.position.set(-6.2,FLOOR_Y,7.6);g.rotation.y=-0.4;g.visible=false;crowd.add(g);return g;
 })();
 let lookKey='';
+
+/* ---------- animated people (Quaternius, CC0): real walk / idle / sit cycles; recoloured per guest ---------- */
+const CHAR_FILES=['Male_Casual','Male_LongSleeve','Male_Shirt','Female_Casual','Female_Dress','Female_TankTop','Female_Alternative'];
+const charTemplates=[];let suitTemplate=null;
+const PERSON_H=5.0;   /* same height as the old capsule people */
+function loadChar(name){
+  return new Promise(res=>gltf.load('assets/characters/'+name+'.glb',d=>{
+    const box=new THREE.Box3().setFromObject(d.scene),h=box.max.y-box.min.y;
+    res({scene:d.scene,clips:d.animations,scale:PERSON_H/h,name});
+  },undefined,()=>res(null)));
+}
+Promise.all(CHAR_FILES.map(loadChar)).then(list=>{for(const t of list)if(t)charTemplates.push(t);});
+loadChar('Male_Suit').then(t=>{
+  suitTemplate=t;if(!t)return;
+  /* swap the capsule waiter for an animated one in a suit */
+  const w=makeAnimated(t,{});w.position.copy(waiter.position);w.visible=waiter.visible;
+  crowd.remove(waiter);crowd.add(w);waiter=w;
+});
+const SIT_DY=-0.3;   /* lowers the sitting clip so the hips land on our chair seats */
+function clip(t,suffix){return t.clips.find(c=>c.name.endsWith(suffix));}
+function makeAnimated(t,colors){
+  const g=new THREE.Group(),body=cloneSkinned(t.scene);body.scale.setScalar(t.scale);g.add(body);
+  body.traverse(o=>{
+    if(!o.isMesh)return;o.castShadow=true;o.frustumCulled=false;
+    const recolor=m=>{
+      const n=(m.name||'').toLowerCase(),c=m.clone();
+      if(n==='shirt'&&colors.shirt)c.color.set(colors.shirt);
+      else if(n==='pants'&&colors.pants)c.color.set(colors.pants);
+      else if(n.startsWith('hair')&&colors.hair)c.color.set(colors.hair);
+      else if(n==='skin'&&colors.skin)c.color.set(colors.skin);
+      return c;
+    };
+    o.material=Array.isArray(o.material)?o.material.map(recolor):recolor(o.material);
+  });
+  const mixer=new THREE.AnimationMixer(body),act={};
+  for(const k of ['Walk','Idle','Sitting','Clapping']){const c=clip(t,k);if(c)act[k]=mixer.clipAction(c);}
+  const hand=body.getObjectByName('MiddleHandR')||body.getObjectByName('MiddleHand.R');
+  g.userData={anim:true,mixer,act,cur:null,hand,body};
+  play(g,'Idle');
+  return g;
+}
+function play(g,name){
+  const u=g.userData,a=u.act[name];if(!a||u.cur===name)return;
+  a.reset().fadeIn(0.25).play();if(u.cur&&u.act[u.cur])u.act[u.cur].fadeOut(0.25);u.cur=name;
+}
+function makePerson(c){
+  if(!charTemplates.length)return makeGuest(c);
+  const t=charTemplates[(c.look!=null?c.look:(c.look=Math.floor(Math.random()*charTemplates.length)))%charTemplates.length];
+  return makeAnimated(t,{shirt:c.shirt,hair:c.hair,skin:c.skin,pants:PANTS[Math.floor(Math.random()*PANTS.length)]});
+}
 
 /* couriers use the Meshy model (white mesh, tinted courier-yellow) when it is available */
 let courierModel=null;
@@ -318,8 +369,11 @@ hooks.push((dt,t)=>{
     const dx=tx-waiter.position.x,dz=tz-waiter.position.z,d=Math.hypot(dx,dz),u=waiter.userData,walking=d>0.1;
     if(walking){const k=Math.min(d,dt*3.5)/d;waiter.position.x+=dx*k;waiter.position.z+=dz*k;waiter.rotation.y=Math.atan2(dx,dz);}
     else waiter.rotation.y=wc?-Math.PI/2+0.3:Math.PI;
-    u.phase+=dt*(walking?9:0);const sw=walking?Math.sin(u.phase)*0.55:0;
-    u.legL.rotation.x=sw;u.legR.rotation.x=-sw;u.armL.rotation.x=-sw*0.8;u.armR.rotation.x=-1.2;
+    if(u.anim){play(waiter,walking?'Walk':'Idle');u.mixer.update(dt);}
+    else{
+      u.phase+=dt*(walking?9:0);const sw=walking?Math.sin(u.phase)*0.55:0;
+      u.legL.rotation.x=sw;u.legR.rotation.x=-sw;u.armL.rotation.x=-sw*0.8;u.armR.rotation.x=-1.2;
+    }
   }
   /* in the kitchen view the player is the cook: hide the cook and the dining room so nothing blocks the counter */
   const working=K&&K.view==='kitchen'&&K.progress>0.6;
@@ -342,13 +396,13 @@ hooks.push((dt,t)=>{
   for(const c of G.cust){
     seen.add(c);
     let a=actors.get(c);
-    if(!a){a={g:c.courier?makeCourier(c):makeGuest(c),last:new THREE.Vector3(X(c.x),FLOOR_Y,Z(c.y)),bub:null};a.g.position.copy(a.last);crowd.add(a.g);actors.set(c,a);}
+    if(!a){a={g:c.courier?makeCourier(c):makePerson(c),last:new THREE.Vector3(X(c.x),FLOOR_Y,Z(c.y)),bub:null};a.g.position.copy(a.last);crowd.add(a.g);actors.set(c,a);}
     const g=a.g,u=g.userData;
     const seated=!c.courier&&(c.state==='wait'||c.state==='eat');
     let px=X(c.x),pz=Z(c.y);
     if(seated){const tb=tables[c.table];px=tb.position.x+SEAT_DX;pz=tb.position.z;}
     const dx=px-a.last.x,dz=pz-a.last.z,moving=Math.hypot(dx,dz)>0.002;
-    g.position.set(px,FLOOR_Y+(seated?-0.95:0),pz);
+    g.position.set(px,FLOOR_Y+(seated?(u.anim?SIT_DY+0.95:0)-0.95:0),pz);
     if(moving)g.rotation.y=Math.atan2(dx,dz);
     else if(seated)g.rotation.y=Math.PI/2;
     else if(c.courier)g.rotation.y=-Math.PI/2+0.6;
@@ -356,7 +410,8 @@ hooks.push((dt,t)=>{
     if(Math.abs(px-X(662))<2.5&&Math.abs(pz-DOOR_Z)<2.5)nearDoor=true;
     /* walk cycle / seated pose */
     u.phase=(u.phase||0)+dt*(moving?9:0);
-    if(u.legL){
+    if(u.anim){play(g,seated?'Sitting':moving?'Walk':'Idle');u.mixer.update(dt);}
+    else if(u.legL){
       const sw=moving?Math.sin(u.phase)*0.6:0;
       u.legL.rotation.x=seated?-1.45:sw;u.legR.rotation.x=seated?-1.45:-sw;
       u.armL.rotation.x=seated?-0.5:-sw*0.8;
@@ -364,9 +419,10 @@ hooks.push((dt,t)=>{
       u.body.position.y=moving?Math.abs(Math.sin(u.phase))*0.08:0;
     }else if(u.body){u.body.position.y=moving?Math.abs(Math.sin(t*9))*0.12:0;u.body.rotation.z=moving?Math.sin(t*9)*0.04:0;}
     /* a bottle from the fridge, held in the hand from then on */
-    if(c.bottle&&!c.bottle.none&&!u.bottle&&u.armR){
+    if(c.bottle&&!c.bottle.none&&!u.bottle&&(u.armR||u.hand)){
       u.bottle=mesh(handBottleGeo,new THREE.MeshPhysicalMaterial({color:c.bottle.c,roughness:0.15,clearcoat:1}));
-      u.bottle.position.set(0,-1.35,0.15);u.armR.add(u.bottle);
+      if(u.hand){u.bottle.scale.setScalar(1/(u.body.scale.x||1));u.hand.add(u.bottle);}
+      else{u.bottle.position.set(0,-1.35,0.15);u.armR.add(u.bottle);}
     }
     if(u.bag){
       const waiting=c.state==='wait'||c.state==='eat';

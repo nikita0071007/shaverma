@@ -33,6 +33,7 @@
 - `assets/polyhaven/` — CC0 (доска, мебель, лампа, растение, касса, текстуры). Тяжёлые модели упрощены `gltfpack` (`*_lo.gltf`).
 - `assets/models/sauce-bottle.glb`, `courier.glb` — Meshy, бесплатный тариф, CC BY 4.0 → в игре строка «3D-модели: Meshy». Курьер без текстуры (тонируется в коде).
 - `assets/textures/` — мясо и готовая шаверма из картинок, присланных Никитой.
+- `assets/characters/` — анимированные люди Quaternius (CC0, Animated Men/Women, Google Drive → FBX → GLB через FBX2glTF): Walk/Idle/Sitting и др.; гости перекрашиваются по материалам Shirt/Pants/Hair/Skin, официант — Male_Suit. Клонировать через `SkeletonUtils.clone`. Повар пока процедурный (его одежда меняется в магазине).
 - Бренды не использовать (была «Яндекс Еда» → заменено на «Мчим Еда»).
 
 ## Как проверять (облачная среда)
@@ -41,9 +42,10 @@
 - Браузер: Playwright из скретчпада, `executablePath` = `/opt/pw-browsers/chromium_headless_shell-1194/.../headless_shell`, флаги `--use-angle=swiftshader --enable-unsafe-swiftshader`. Сервер `python3 -m http.server 8765` в корне репо (запускать в той же команде — фоновые процессы умирают).
 - 3D в swiftshader очень медленный: ждать `window.Kitchen.progress>=1`, гостей подкладывать через `window.Game.G.cust.push(...)`, обучение отключать `localStorage.setItem('shaverma-tutorial-done','1')`.
 - Meshy CLI: `NODE_USE_ENV_PROXY=1 npm exec --yes --package=meshy-cli@0.4.0 -- meshy ...`; создание моделей через API на бесплатном тарифе запрещено, но модели из аккаунта Никиты (ссылки `meshy.ai/s/...`) скачиваются через `text-to-3d get <id>` → `model_urls.glb`.
-- Разрешённые домены сети: meshy, polyhaven (настраивал Никита).
+- Разрешённые домены сети: meshy, polyhaven, quaternius.com, kenney.nl, download.blender.org; Google Drive и github releases тоже открываются; poly.pizza блокирует ботов.
+- Godot 4.3 в облаке работает (рендер через `xvfb-run` + `--rendering-driver opengl3`), экспорт под Android не проверялся.
 
 ## Решения и планы
 
 - Движок: доделываем игру на Three.js здесь; позже, возможно, перенос в Unity (плагин Unity для Claude Code — только локально у Никиты) или Godot. Для RuStore — упаковка в Android (Capacitor), донат за деньги — через оплату RuStore.
-- Бэклог: проверка на реальном телефоне и производительность; мясо на вертеле заканчивается (покупка нового); грязные столы; уровни; цветной курьер из Meshy (нужна текстура); 3D-гости из Meshy вместо процедурных; живой голос (ElevenLabs); фоновая музыка; идеи доната — золотой вертел, музыкальный автомат, аквариум, VIP-зона, веранда, помощник повара, сезонные интерьеры, собака.
+- Бэклог: проверка на реальном телефоне и производительность; мясо на вертеле заканчивается (покупка нового); грязные столы; уровни; цветной курьер из Meshy (нужна текстура); живой голос (ElevenLabs); фоновая музыка; идеи доната — золотой вертел, музыкальный автомат, аквариум, VIP-зона, веранда, помощник повара, сезонные интерьеры, собака.
