@@ -3,6 +3,7 @@
    Talks to the game through window.Kitchen (show/hide/reset/wrap/state) and window.onKitchenChange(state). */
 import * as THREE from 'three';
 import {RoomEnvironment} from '../vendor/RoomEnvironment.js';
+import {GLTFLoader} from '../vendor/loaders/GLTFLoader.js';
 
 const MEATS={
   chicken:{name:'КУРИЦА',base:'#B9732E',dark:'#5A2E0E',light:'#E2A453'},
@@ -197,7 +198,8 @@ makeSpit('beef',-2.3);
 
 /* ---------- board + lavash ---------- */
 const board=mesh(new THREE.BoxGeometry(3.8,0.16,2.9),M.wood);board.position.set(0.6,0.08,0.75);scene.add(board);
-const lavash=new THREE.Group();lavash.position.set(0.6,0.17,0.75);scene.add(lavash);
+let lavashY=0.17;
+const lavash=new THREE.Group();lavash.position.set(0.6,lavashY,0.75);scene.add(lavash);
 const lg=new THREE.CircleGeometry(1.35,72);lg.rotateX(-Math.PI/2);
 {const p=lg.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,0.012*Math.sin(x*7)+0.01*Math.cos(z*9)+(Math.hypot(x,z)>1.2?0.02:0));}lg.computeVertexNormals();}
 const lav=mesh(lg,M.lavash);lav.scale.set(1.15,1,0.95);lavash.add(lav);
@@ -222,10 +224,11 @@ function piece(kind){
 function makeBowl(kind,x,z,label){
   const g=new THREE.Group();g.position.set(x,0,z);
   const b=mesh(bowlGeometry(),M.ceramic);g.add(b);
+  const pile=new THREE.Group();g.add(pile);g.userData.shell=b;g.userData.pile=pile;
   for(let i=0;i<26;i++){
     const p=piece(kind),a=rnd(0,6.28),r=rnd(0,0.45);
     p.position.set(Math.cos(a)*r,0.16+rnd(0,0.14)+(0.45-r)*0.25,Math.sin(a)*r);
-    p.rotation.set(p.rotation.x+rnd(-0.5,0.5),rnd(0,6.28),rnd(-0.4,0.4));g.add(p);
+    p.rotation.set(p.rotation.x+rnd(-0.5,0.5),rnd(0,6.28),rnd(-0.4,0.4));pile.add(p);
   }
   const lbl=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.24),new THREE.MeshBasicMaterial({map:labelTex(label,'#2b1d14','#f6e7c8')}));
   lbl.position.set(0,0.01,0.9);lbl.rotation.x=-Math.PI/2;g.add(lbl);
@@ -368,11 +371,51 @@ function clearFill(){
   flights.length=0;sauceAnims.length=0;
   for(const c of [...fill.children]){fill.remove(c);if(c.geometry&&c.geometry.type==='TubeGeometry')c.geometry.dispose();}
 }
-function reset(){clearFill();lavash.scale.set(1,1,1);lavash.position.y=0.17;state=blank();changed();}
+function reset(){clearFill();lavash.scale.set(1,1,1);lavash.position.y=lavashY;state=blank();changed();}
 function wrap(done){
   wrapAnim={t:0,done};
   for(const f of flights){f.obj.position.copy(f.to);}flights.length=0;
 }
+
+/* ---------- free Poly Haven assets (CC0); procedural stand-ins stay until they load ---------- */
+const PH='assets/polyhaven/';
+const gltf=new GLTFLoader(),texLoader=new THREE.TextureLoader();
+/* Fit a loaded model: centred on x/z, resting on y=0, widest horizontal side = width. */
+function fitted(root,width){
+  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  const box=new THREE.Box3().setFromObject(root),size=box.getSize(new THREE.Vector3());
+  const k=width/Math.max(size.x,size.z);
+  root.scale.setScalar(k);
+  const b2=new THREE.Box3().setFromObject(root),c=b2.getCenter(new THREE.Vector3());
+  root.position.set(-c.x,-b2.min.y,-c.z);
+  const g=new THREE.Group();g.add(root);g.userData.height=b2.max.y-b2.min.y;return g;
+}
+function loadModel(name,width){
+  return new Promise(res=>gltf.load(PH+name+'/'+name+'.gltf',d=>res(fitted(d.scene,width)),undefined,()=>res(null)));
+}
+function pbr(name,repeat,mat,rotation=0){
+  const f=k=>{const t=texLoader.load(PH+name+'/'+name+'_'+k+'_1k.jpg');t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.copy(repeat);t.rotation=rotation;t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;};
+  const map=f('diffuse');map.colorSpace=THREE.SRGBColorSpace;
+  mat.map=map;mat.normalMap=f('nor_gl');mat.roughnessMap=f('rough');mat.roughness=1;mat.color.set('#ffffff');mat.needsUpdate=true;
+}
+pbr('long_white_tiles',new THREE.Vector2(1.6,4),M.wall,Math.PI/2);  /* rotated: horizontal metro tiles */
+pbr('kitchen_wood',new THREE.Vector2(4,1),M.wood);
+loadModel('wooden_cutting_board',3.9).then(m=>{
+  if(!m)return;
+  m.position.copy(board.position).setY(0);scene.add(m);board.visible=false;
+  lavashY=m.userData.height+0.01;lavash.position.y=lavashY;
+});
+loadModel('wooden_bowl_01',1.5).then(m=>{
+  if(!m)return;
+  for(const k in bowls){
+    const g=bowls[k],c=m.clone();g.add(c);g.userData.shell.visible=false;
+    g.userData.pile.position.y=m.userData.height-0.3;
+  }
+});
+loadModel('yellow_onion',0.42).then(m=>{
+  if(!m)return;
+  [[1.75,-1.05,0.4],[1.95,-0.6,2.1]].forEach(([x,z,r])=>{const o=m.clone();o.position.set(x,0,z);o.rotation.y=r;scene.add(o);});
+});
 
 /* ---------- size + loop ---------- */
 let visible=false;
@@ -418,7 +461,7 @@ function frame(){
   if(wrapAnim){
     wrapAnim.t+=dt/0.75;const k=Math.min(wrapAnim.t,1);
     if(k<0.55){const q=k/0.55;lavash.scale.set(1,1+q*0.6,1-q*0.72);}
-    else{const q=(k-0.55)/0.45;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));lavash.position.y=0.17+q*1.5;}
+    else{const q=(k-0.55)/0.45;lavash.scale.set(1-q,1.6*(1-q),0.28*(1-q));lavash.position.y=lavashY+q*1.5;}
     if(k>=1){const done=wrapAnim.done;wrapAnim=null;reset();if(done)done();}
   }
   renderer.render(scene,camera);
