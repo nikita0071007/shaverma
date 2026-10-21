@@ -64,6 +64,44 @@ function startLoop(name){
   return l;
 }
 
+/* ---------- music ---------- */
+var musicOn=true,musicTimer=null,musicNext=0,musicStep=0,musicBus=null;
+try{musicOn=localStorage.getItem('shaverma-music')!=='0';}catch(e){}
+var BPM=96,STEP=60/BPM/4;
+/* D hijaz-ish scale: D Eb F# G A Bb C */
+var SCALE=[293.66,311.13,369.99,392,440,466.16,523.25,587.33];
+var DRUM='D..tD.t.D..tD.tt';   /* doum / tek over 16 sixteenths */
+var CHORDS=[0,0,3,4];
+function bus(){if(!musicBus){musicBus=ac.createGain();musicBus.gain.value=0.33;musicBus.connect(master);}return musicBus;}
+function pluck(f,t,vol){
+  var o=ac.createOscillator(),o2=ac.createOscillator(),g=ac.createGain(),lp=ac.createBiquadFilter();
+  o.type='sawtooth';o2.type='triangle';o.frequency.value=f;o2.frequency.value=f*2.003;lp.type='lowpass';lp.frequency.setValueAtTime(2600,t);lp.frequency.exponentialRampToValueAtTime(500,t+0.35);
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.008);g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);
+  o.connect(lp);o2.connect(lp);lp.connect(g).connect(bus());o.start(t);o2.start(t);o.stop(t+0.5);o2.stop(t+0.5);
+}
+function drum(kind,t){
+  var o=ac.createOscillator(),g=ac.createGain();
+  if(kind==='D'){o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(55,t+0.18);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.5,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);}
+  else{o.frequency.setValueAtTime(700,t);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.18,t+0.002);g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
+    var s=ac.createBufferSource(),f=ac.createBiquadFilter(),ng=ac.createGain();s.buffer=noiseBuf;f.type='bandpass';f.frequency.value=3500;ng.gain.setValueAtTime(0.12,t);ng.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+    s.connect(f).connect(ng).connect(bus());s.start(t,Math.random());s.stop(t+0.08);}
+  o.connect(g).connect(bus());o.start(t);o.stop(t+0.3);
+}
+var melodyIdx=4;
+function scheduleMusic(){
+  if(!ac||muted||!musicOn)return;
+  while(musicNext<ac.currentTime+0.25){
+    var t=musicNext,st=musicStep%16,bar=Math.floor(musicStep/16)%CHORDS.length,root=CHORDS[bar];
+    var d=DRUM[st];if(d!=='.')drum(d,t);
+    if(st%4===0)pluck(SCALE[root]/4,t,0.16);                                   /* bass on the beat */
+    if(st%2===0&&Math.random()<0.55){                                           /* wandering melody */
+      melodyIdx=Math.max(0,Math.min(SCALE.length-1,melodyIdx+[-2,-1,-1,1,1,2][Math.floor(Math.random()*6)]));
+      pluck(SCALE[melodyIdx],t,0.07);
+    }
+    musicNext+=STEP;musicStep++;
+  }
+}
+
 window.Sfx={
   play:function(name){var c=ctx();if(!c||muted||!SOUNDS[name])return;SOUNDS[name](c.currentTime+0.01);},
   loop:function(name,on){
@@ -73,6 +111,14 @@ window.Sfx={
       var l=loops[name];delete loops[name];if(l.crackle)clearInterval(l.crackle);
       l.g.gain.cancelScheduledValues(c.currentTime);l.g.gain.setTargetAtTime(0.0001,c.currentTime,0.08);l.s.stop(c.currentTime+0.4);
     }
+  },
+  /* background music: a laid-back oriental groove made on the fly (darbuka + oud-like pluck + bass) */
+  get musicOn(){return musicOn;},
+  setMusic:function(on){
+    musicOn=!!on;try{localStorage.setItem('shaverma-music',musicOn?'1':'0');}catch(e){}
+    var c=ctx();if(!c)return;
+    if(musicOn&&!muted&&!musicTimer){musicNext=c.currentTime+0.1;musicStep=0;musicTimer=setInterval(scheduleMusic,100);}
+    if((!musicOn||muted)&&musicTimer){clearInterval(musicTimer);musicTimer=null;}
   },
   /* the cook's voice: the browser's built-in Russian speech, no audio files */
   say:function(text){
@@ -91,6 +137,7 @@ window.Sfx={
     muted=!!v;try{localStorage.setItem('shaverma-muted',muted?'1':'0');}catch(e){}
     if(master)master.gain.value=muted?0:0.8;
     if(muted)Object.keys(loops).forEach(function(n){window.Sfx.loop(n,false);});
+    window.Sfx.setMusic(musicOn);
   }
 };
 })();

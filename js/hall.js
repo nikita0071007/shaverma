@@ -58,6 +58,15 @@ const tables=TABLES.map(([x,y])=>{
   return g;
 });
 const SEAT_DX=-1.75;   /* chair sits on the table's left side */
+/* leftovers on a table after a guest leaves: crumpled wrapper, an empty glass, crumbs */
+const messes=tables.map(t=>{
+  const g=new THREE.Group();g.position.y=2.42;g.visible=false;t.add(g);
+  const paper=mesh(new THREE.IcosahedronGeometry(0.28,0),new THREE.MeshStandardMaterial({color:'#b0884f',roughness:1,flatShading:true}));paper.position.set(-0.3,0.15,0.2);paper.scale.set(1.2,0.7,1);g.add(paper);
+  const glassM=new THREE.MeshPhysicalMaterial({color:'#dfeff3',roughness:0.1,transparent:true,opacity:0.6});
+  const cup=mesh(new THREE.CylinderGeometry(0.16,0.12,0.42,12),glassM);cup.position.set(0.35,0.21,-0.25);g.add(cup);
+  for(let i=0;i<10;i++){const c=mesh(new THREE.BoxGeometry(0.06,0.03,0.05),new THREE.MeshStandardMaterial({color:'#d9b27a'}));c.position.set(Math.sin(i*7)*0.6,0.02,Math.cos(i*5)*0.5);g.add(c);}
+  return g;
+});
 function loadPH(name,width,file=name){return new Promise(res=>gltf.load(PH+name+'/'+file+'.gltf',d=>res(fitted(d.scene,width)),undefined,()=>res(null)));}
 loadPH('round_wooden_table_01',2.6).then(m=>{if(!m)return;for(const t of tables){t.userData.stub.forEach(s=>s.visible=false);t.add(m.clone());}});
 /* "soft sofas" upgrade: level 1 seat cushion, 2 back cushion, 3 a little vase of flowers on the table */
@@ -422,6 +431,10 @@ function bubbleFor(c){
   layer.appendChild(b);return b;
 }
 const floats=new Map();
+const cleanBtns=tables.map((t,i)=>{
+  const b=document.createElement('button');b.type='button';b.className='clean';b.textContent='🧽 Убрать';b.hidden=true;
+  b.onclick=()=>{if(window.Game)window.Game.clean(i);};layer.appendChild(b);return b;
+});
 /* kitchen order rail: a paper ticket per waiting guest, like the rail above a real kitchen pass */
 const rail=document.createElement('div');rail.className='rail';root.appendChild(rail);
 const tickets=new Map();
@@ -483,7 +496,11 @@ hooks.push((dt,t)=>{
       u.armL.rotation.x=walking?-sw*0.8:-0.9+Math.sin(u.phase)*0.15;u.armR.rotation.x=walking?sw*0.8:-0.9-Math.sin(u.phase)*0.15;
     }
   }
-  tables.forEach((tb,i)=>{tb.visible=i<G.tables;});
+  tables.forEach((tb,i)=>{
+    tb.visible=i<G.tables;const dirty=!!(G.dirty&&G.dirty[i])&&tb.visible;messes[i].visible=dirty;
+    const b=cleanBtns[i];b.hidden=!dirty||!inHall;
+    if(!b.hidden){const p=screen(tb.position.x,FLOOR_Y+3.4,tb.position.z);b.style.transform='translate('+(p.x|0)+'px,'+(p.y|0)+'px) translate(-50%,-100%)';}
+  });
   fridgeBottles.forEach((b,i)=>{b.visible=i<(G.fridge||0);});
   comfortBits.forEach((bits,lvl)=>bits.forEach(b=>{b.visible=G.comfort>lvl;}));
   signs.forEach((m,i)=>{m.visible=G.sign>i;if(m.visible)m.material.opacity=0.85+0.15*Math.sin(t*(i===2?9:3)+i*2)*(Math.random()<0.02?3:1);});

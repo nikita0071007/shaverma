@@ -181,6 +181,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .bub .ic{flex-wrap:nowrap}
 .tk .cup{clip-path:polygon(0 0,100% 0,85% 100%,15% 100%);height:14px!important}
 @media (max-width:700px){.rail{top:46px}}
+.clean{position:absolute;left:0;top:0;pointer-events:auto;border:2px solid #2B1D14;background:#dff3ff;color:#123;border-radius:999px;padding:4px 10px;font-weight:700;font-size:12px;box-shadow:0 3px 8px rgba(0,0,0,.3);animation:pulse 1.4s ease-in-out infinite}
 .flt{position:absolute;left:0;top:0;font-weight:700;font-size:15px;white-space:nowrap;text-shadow:0 1px 0 #1a120c,0 0 6px rgba(0,0,0,.7)}
 .gems{cursor:pointer;color:var(--cream);text-align:left}
 .gems .v{font-size:16px}
@@ -223,6 +224,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
     <div class="stat"><span class="k">Репутация</span><span class="v" id="hRep">3.0 ★</span></div>
     <button class="stat gems" id="shopBtn" aria-label="Магазин"><span class="k">Магазин</span><span class="v" id="hGems">💎 0</span></button>
     <button class="stat mute" id="mute" aria-label="Звук">🔊</button>
+    <button class="stat mute" id="music" aria-label="Музыка">🎵</button>
     <div class="timebox"><span class="k"><span>До закрытия</span><span id="hLeft">—</span></span><div class="bar"><i id="hTime"></i></div></div>
   </div>
   </div>
@@ -291,14 +293,14 @@ function K(){return window.Kitchen;}
 var anim=0;
 
 function newGame(){
-  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},fridge:12,gems:20,dev:false,
+  G={courierT:COURIER_EVERY-COURIER_FIRST,phase:'intro',day:1,money:0,rep:3,tables:3,comfort:0,sign:0,perks:{knife:0,grill:0,pour:0},fridge:12,spit:{chicken:1,beef:1},dirty:[],dirtyT:[],gems:20,dev:false,
     owned:{outfit_white:1,hat_chef:1,hat_none:1,look_misha:1,theme_brick:1},equip:{outfit:'white',hat:'chef',look:'misha',theme:'brick',waiter:false,cat:false},time:0,spawnT:1,cust:[],occ:[],sel:null,floats:[],stats:{served:0,lost:0,earned:0},lastLeft:-1};
 }
 /* ---------- save ---------- */
 /* Progress is saved between days: a reload mid-day restarts that day with the money it opened with. */
 var SAVE_KEY='shaverma-save-v1';
 function save(){
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT,fridge:G.fridge,
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,day:G.phase==='summary'?G.day+1:G.day,money:G.money,rep:G.rep,tables:G.tables,comfort:G.comfort,sign:G.sign,perks:G.perks,courierT:G.courierT,fridge:G.fridge,spit:G.spit,
     gems:G.gems,dev:G.dev,owned:G.owned,equip:G.equip}));}catch(e){}
 }
 function loadSave(){
@@ -313,12 +315,24 @@ function applySave(s){
   if(s.perks)for(var k in G.perks)G.perks[k]=s.perks[k]?1:0;
   if(typeof s.gems==='number')G.gems=Math.max(0,s.gems|0);
   if(typeof s.fridge==='number')G.fridge=clamp(s.fridge|0,0,60);
+  if(s.spit)for(var sk in G.spit)if(typeof s.spit[sk]==='number')G.spit[sk]=clamp(s.spit[sk],0,1);
   G.dev=!!s.dev;
   if(s.owned)for(var o in s.owned)G.owned[o]=1;
   if(s.equip)for(var q in G.equip)if(q in s.equip)G.equip[q]=s.equip[q];
 }
 /* kitchen perks bought in the shop change how the 3D kitchen behaves */
-function syncPerks(){if(K())K().setPerks({knife:G.perks.knife?2:1,grill:G.perks.grill?1.4:1,pour:G.perks.pour?2:1});}
+function syncPerks(){if(K()){K().setPerks({knife:G.perks.knife?2:1,grill:G.perks.grill?1.4:1,pour:G.perks.pour?2:1});K().setSpits(G.spit);}}
+/* doner cones run out; a new one costs money (free in developer mode) */
+var SPIT_PRICE=300;
+window.onSpitChange=function(a){G.spit=a;};
+window.onSpitRefill=function(kind){
+  if(!G.dev&&G.money<SPIT_PRICE){msg('Новый вертел стоит '+fmt(SPIT_PRICE)+' — не хватает денег.');sfx('bad');return false;}
+  if(!G.dev)G.money-=SPIT_PRICE;hud();sfx('buy');msg('Новый вертел ('+(kind==='chicken'?'курица':'говядина')+') — '+fmt(SPIT_PRICE)+'.');
+  say('Ставлю новый вертел!');return true;
+};
+/* dirty tables: a served guest leaves wrappers behind; nobody sits there until it is cleaned */
+
+function cleanTable(t){if(!G.dirty[t])return;G.dirty[t]=false;G.dirtyT[t]=0;sfx('wrap');}
 function dayLen(){return Math.min(240,150+(G.day-1)*10);}   /* 2.5-4 minutes: cooking with the grill takes a while */
 function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
@@ -472,10 +486,11 @@ function showSummary(){
 
 /* ---------- day flow ---------- */
 function startDay(){
-  devTopUp();
+  devTopUp();if(window.Sfx)Sfx.setMusic(Sfx.musicOn);
   G.phase='play';G.time=0;G.spawnT=1;G.cust=[];G.occ=[];G.sel=null;G.floats=[];G.lastLeft=-1;
   G.stats={served:0,lost:0,earned:0};
   G.tut=G.day===1&&!tutorialDone()?{}:null;
+  G.dirty=[];G.dirtyT=[];
   resetBuild();setView('hall');updateTicket();msg('');hud();hideOv();
   if(G.tut)spawn(orderOf(RECIPES[0],null));
 }
@@ -487,7 +502,7 @@ function nextInterval(){
 }
 function spawn(fixedOrder){
   var free=[];
-  for(var i=0;i<G.tables;i++)if(!G.occ[i])free.push(i);
+  for(var i=0;i<G.tables;i++)if(!G.occ[i]&&!G.dirty[i])free.push(i);
   if(!free.length)return false;
   var t=free[Math.floor(Math.random()*free.length)];
   G.occ[t]=true;sfx('door');
@@ -628,6 +643,7 @@ function update(dt){
       c.eatT-=dt;
       if(c.eatT<=0){
         G.money+=c.pay;G.stats.earned+=c.pay;sfx('coin');
+        if(!c.courier&&c.table>=0)G.dirty[c.table]=true;
         float(c.x,c.y-50,'+'+Math.round(c.pay)+' ₽','#F2A93B');
         leave(c);hud();
       }
@@ -635,6 +651,8 @@ function update(dt){
       if(moveAlong(c,dt)){G.cust.splice(G.cust.indexOf(c),1);}
     }
   });
+  /* the waiter clears dirty tables after a few seconds */
+  if(G.equip.waiter)for(var dt2=0;dt2<G.tables;dt2++)if(G.dirty[dt2]){G.dirtyT[dt2]=(G.dirtyT[dt2]||0)+dt;if(G.dirtyT[dt2]>5)cleanTable(dt2);}
   G.floats.forEach(function(f){f.t+=dt;});
   G.floats=G.floats.filter(function(f){return f.t<1.6;});
   var left=Math.max(0,Math.ceil(len-G.time));
@@ -645,7 +663,8 @@ function update(dt){
   document.getElementById('hTime').style.width=clamp(G.time/len*100,0,100)+'%';
   document.getElementById('tkBar').style.width=(G.sel&&G.sel.state==='wait'?G.sel.patience/G.sel.maxP*100:0)+'%';
   var waiting=G.cust.filter(function(c){return c.state==='wait';}).length;
-  var wt=waiting?'· ждут '+waiting:'';
+  var dirtyN=G.dirty.filter(Boolean).length;
+  var wt=(waiting?'· ждут '+waiting:'')+(dirtyN?' · 🧽 '+dirtyN:'');
   if(wt!==G.lastWait){G.lastWait=wt;document.getElementById('waitN').textContent=wt;}
   if(G.time>=len&&G.cust.length===0)showSummary();
 }
@@ -702,6 +721,7 @@ function setView(v){
 window.Game={
   get G(){return G;},
   COURIER_BRAND:COURIER_BRAND,COURIER_COLOR:COURIER_COLOR,
+  clean:function(t){if(G.phase==='play')cleanTable(t);},
   select:function(c){if(G.phase!=='play'||c.state!=='wait')return;sfx('click');G.sel=c;updateTicket();setView('kitchen');}
 };
 document.getElementById('tabHall').onclick=function(){sfx('click');setView('hall');};
@@ -709,6 +729,9 @@ document.getElementById('tabKitchen').onclick=function(){sfx('click');setView('k
 var muteBtn=document.getElementById('mute');
 function syncMute(){var m=window.Sfx&&Sfx.muted;muteBtn.textContent=m?'🔇':'🔊';muteBtn.setAttribute('aria-pressed',m?'true':'false');}
 muteBtn.onclick=function(){if(window.Sfx){Sfx.muted=!Sfx.muted;syncMute();}};syncMute();
+var musicBtn=document.getElementById('music');
+function syncMusic(){var on=window.Sfx&&Sfx.musicOn;musicBtn.setAttribute('aria-pressed',on?'false':'true');musicBtn.style.opacity=on?1:0.5;}
+musicBtn.onclick=function(){if(window.Sfx){Sfx.setMusic(!Sfx.musicOn);syncMusic();}};syncMusic();
 document.addEventListener('kitchenready',function(){cv.hidden=true;K().start();setView(view);syncPerks();renderBuild();});
 function orderText(o){
   return '«'+o.name+'»'+(o.drink?' + '+DRINK[o.drink].name.toLowerCase():'');

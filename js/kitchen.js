@@ -206,7 +206,7 @@ function makeSpit(kind,x){
     s.userData.t=i/6;g.add(s);smoke.push(s);
   }
   scene.add(g);
-  const sp={kind,g,meat,hm,light,smoke,glow,shrink:1};spits.push(sp);return sp;
+  const sp={kind,g,meat,hm,light,smoke,glow,lbl,shrink:1,amount:1,grow:1};spits.push(sp);return sp;
 }
 makeSpit('chicken',-4.5);
 makeSpit('beef',-2.3);
@@ -478,8 +478,19 @@ const stripGeo=(()=>{
 })();
 let slivers=0;
 /* one thin strip of meat leaves the knife and lands on the lavash */
+/* ---------- the cone runs out: each portion eats a twelfth of it ---------- */
+const PORTIONS_PER_SPIT=12;
+function spitLook(sp){
+  sp.shrink=0.42+0.58*sp.amount;sp.meat.scale.set(sp.shrink,0.25+0.75*Math.min(1,sp.amount*1.6),sp.shrink);
+  sp.meat.visible=sp.amount>0.001;
+  const pct=Math.round(sp.amount*100);
+  sp.lbl.material.map.dispose();
+  sp.lbl.material.map=labelTex(sp.amount>0?MEATS[sp.kind].name+' '+pct+'%':'ПУСТО — ТАП','#2b1d14',sp.amount>0.25?'#f2a93b':'#ff6b4a');
+  sp.lbl.material.needsUpdate=true;
+}
+function spitsChanged(){if(window.onSpitChange)window.onSpitChange(Object.fromEntries(spits.map(s=>[s.kind,s.amount])));}
 function sliver(sp){
-  if(state.meatN>=MEAT_MAX||slivers>60)return;
+  if(state.meatN>=MEAT_MAX||slivers>60||sp.amount<=0)return;
   slivers++;
   const s=mesh(stripGeo,meatMat[sp.kind+'Strip']);
   s.rotation.set(-Math.PI/2+rnd(-0.3,0.3),rnd(0,6.28),rnd(-0.2,0.2));s.scale.setScalar(rnd(0.7,1.05));
@@ -489,10 +500,11 @@ function sliver(sp){
 /* every so often the slivers add up to a counted portion */
 function portion(sp){
   if(state.meatN>=MEAT_MAX){hint.textContent='Мяса уже достаточно';return;}
+  if(sp.amount<=0){hint.textContent='Мясо кончилось! Нажмите на вертел, чтобы поставить новый';return;}
+  sp.amount=Math.max(0,sp.amount-perks.knife/PORTIONS_PER_SPIT);spitLook(sp);spitsChanged();
   state.meatN=Math.min(MEAT_MAX,state.meatN+perks.knife);cook.x=sp.g.position.x;
   state.meat=!state.meat||state.meat===sp.kind?sp.kind:'mixed';
   if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
-  sp.shrink=Math.max(0.86,sp.shrink-0.006);sp.meat.scale.set(sp.shrink,1,sp.shrink);
   changed();
 }
 function addVeg(kind){
@@ -544,6 +556,11 @@ el.addEventListener('pointerdown',e=>{
   const h=pick(e);if(!h)return;
   if(h.act.type==='meat'){
     const sp=spits.find(s=>s.kind===h.act.kind);
+    /* an empty spit: tapping it buys and mounts a fresh cone */
+    if(sp.amount<=0){
+      if(window.onSpitRefill&&window.onSpitRefill(sp.kind)){sp.amount=1;sp.grow=0;spitLook(sp);spitsChanged();if(window.Sfx)Sfx.play('drop');}
+      return;
+    }
     drag={sp,x:e.clientX,y:e.clientY,acc:0,sliver:0};el.setPointerCapture(e.pointerId);
     moveKnife(e,sp);sliver(sp);
   }else if(h.act.type==='veg')addVeg(h.act.kind);
@@ -704,6 +721,7 @@ function frame(){
   if(knife.visible)knife.position.lerp(knifeTarget,Math.min(1,dt*20));
   for(const sp of spits){
     sp.meat.rotation.y+=dt*0.45;
+    if(sp.grow<1){sp.grow=Math.min(1,sp.grow+dt*1.5);const k=sp.grow*sp.grow*(3-2*sp.grow);sp.meat.scale.set(sp.shrink*k,k,sp.shrink*k);}
     const fl=1.25+Math.sin(t*7+sp.g.position.x)*0.08+Math.sin(t*13)*0.05;
     sp.hm.emissiveIntensity=fl;sp.light.intensity=fl*5.5;sp.glow.material.opacity=0.32+fl*0.12;
     for(const s of sp.smoke){
@@ -779,6 +797,7 @@ window.Kitchen={
   get progress(){return camT;},
   setOrder(o){order=o;updateHint();},
   setPerks(p){Object.assign(perks,p);},
+  setSpits(a){for(const sp of spits)if(typeof a[sp.kind]==='number'){sp.amount=Math.max(0,Math.min(1,a[sp.kind]));spitLook(sp);}},
   FILL_OK,FILL_MAX,
   reset,roll:rollUp,take:takeOff,toastLabel,TOAST_OK,TOAST_MAX,TOAST_BURNT,
   get state(){return Object.assign({},state,{ing:Object.assign({},state.ing)});},
