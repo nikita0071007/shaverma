@@ -314,7 +314,7 @@ function makeJug(key,x,z){
 makeJug('tea',-4.75,1.3);makeJug('ayran',-3.85,1.3);makeJug('cola',-3.0,1.3);
 let pouring=null,pourTick=0;
 function startPour(key){
-  pouring={key};
+  pouring={key};cook.x=jugs[key].userData.home.x;
   state.drink=!state.drink||state.drink===key?key:'mixed';
   liquidMat.color.set(state.drink==='mixed'?'#6b4a2a':DRINKS[key].c);liquidMat.opacity=DRINKS[key].op;
   if(window.Sfx)Sfx.loop('pour',true);
@@ -344,7 +344,7 @@ function updateDrinks(dt){
   spill.visible=state.fill>FILL_MAX;spill.scale.setScalar(Math.min(1,0.3+(state.fill-FILL_MAX)*4));
 }
 
-/* ---------- kitchen dressing: hood over the spits, wall shelf, digital menu boards, sneeze guard ---------- */
+/* ---------- kitchen dressing: hood over the spits, wall shelf, digital menu boards ---------- */
 {
   const hood=mesh(new THREE.BoxGeometry(5.6,1.1,2.4),M.steel);hood.position.set(-3.6,6.4,-2.2);scene.add(hood);
   const lip=mesh(new THREE.BoxGeometry(5.8,0.25,2.6),M.steel);lip.position.set(-3.6,5.8,-2.1);scene.add(lip);
@@ -354,9 +354,6 @@ function updateDrinks(dt){
   for(let i=0;i<5;i++){
     const c=mesh(new THREE.BoxGeometry(0.75,0.45+((i*7)%3)*0.12,0.7),M.steel);c.position.set(1.4+i*0.95,4.36+c.geometry.parameters.height/2,-2.95);scene.add(c);
   }
-  const glassMat=new THREE.MeshPhysicalMaterial({color:'#e8f4f8',roughness:0.02,transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false});
-  const guard=new THREE.Mesh(new THREE.PlaneGeometry(13.6,1.1),glassMat);guard.position.set(0,2.45,2.15);guard.rotation.x=-0.25;scene.add(guard);
-  for(const x of [-6.7,-2.3,2.3,6.7]){const post=mesh(new THREE.CylinderGeometry(0.04,0.04,2.4,8),M.steel);post.position.set(x,1.2,2.05);scene.add(post);}
 }
 /* green digital menu boards above the kitchen; the shawarma photo is drawn in once it loads */
 const menuBoards=[];
@@ -425,7 +422,7 @@ const stripGeo=(()=>{
 })();
 function shave(sp,point){
   if(state.meatN>=MEAT_MAX){hint.textContent='Мяса уже достаточно';return;}
-  state.meatN++;
+  state.meatN++;cook.x=sp.g.position.x;
   if(window.Sfx)Sfx.play('shave');if(navigator.vibrate)navigator.vibrate(8);
   state.meat=!state.meat||state.meat===sp.kind?sp.kind:'mixed';
   sp.shrink=Math.max(0.86,sp.shrink-0.006);sp.meat.scale.set(sp.shrink,1,sp.shrink);
@@ -437,7 +434,7 @@ function shave(sp,point){
   changed();
 }
 function addVeg(kind){
-  state[kind]=true;if(window.Sfx)Sfx.play('drop');
+  state[kind]=true;cook.x=bowls[kind].position.x;if(window.Sfx)Sfx.play('drop');
   const from=bowls[kind].localToWorld(new THREE.Vector3(0,0.4,0));
   for(let i=0;i<6;i++){const p=piece(kind);p.rotation.y=rnd(0,6.28);fly(p,from,spot(0.8,0.35,0.13+rnd(0,0.05)),0.45+i*0.05,0.9);}
   changed();
@@ -450,7 +447,7 @@ function addSauce(key){
   const m=mesh(geo,new THREE.MeshPhysicalMaterial({color:SAUCES[key].c,roughness:0.2,clearcoat:1}),false);
   geo.setDrawRange(0,0);fill.add(m);
   sauceAnims.push({geo,t:0,total:geo.index.count});
-  const b=bottles[key];b.userData.tilt=1;if(window.Sfx)Sfx.play('squeeze');
+  const b=bottles[key];b.userData.tilt=1;cook.x=b.position.x;if(window.Sfx)Sfx.play('squeeze');
   changed();
 }
 
@@ -510,7 +507,7 @@ function clearFill(){
 }
 function reset(){clearFill();lavash.scale.set(1,1,1);lavash.position.y=lavashY;state=blank();changed();}
 function wrap(done){
-  stopPour();wrapAnim={t:0,done};if(window.Sfx)Sfx.play('wrap');
+  stopPour();wrapAnim={t:0,done};cook.x=lavash.position.x;if(window.Sfx)Sfx.play('wrap');
   for(const f of flights){f.obj.position.copy(f.to);}flights.length=0;
 }
 
@@ -586,9 +583,9 @@ let visible=false;
 /* camera poses; the tabs fly between them */
 const VIEWS={
   kitchen:{pos:new THREE.Vector3(0.4,6.4,10.6),look:new THREE.Vector3(0.4,1.0,-0.9),fov:38},
-  hall:{pos:new THREE.Vector3(2.8,12,24.5),look:new THREE.Vector3(2.8,1.6,3.6),fov:44},
+  hall:{pos:new THREE.Vector3(2.8,13,30),look:new THREE.Vector3(2.8,1.2,7.6),fov:44},
   /* portrait phones: steeper, closer, and allowed to crop the sides a little so the room fills the screen */
-  hallTall:{pos:new THREE.Vector3(2.2,19,15.5),look:new THREE.Vector3(2.2,-1,3.6),fov:44,minAspect:0.85}
+  hallTall:{pos:new THREE.Vector3(2.2,17.5,17.5),look:new THREE.Vector3(2.2,-1.5,5.6),fov:44,minAspect:0.85}
 };
 function pose(v){return v==='hall'&&camera.aspect<1?VIEWS.hallTall:VIEWS[v];}
 let view='hall',camT=1,camFrom=null;
@@ -619,6 +616,7 @@ function resize(){
   renderer.setSize(w,h,false);camera.aspect=w/h;applyCam(camT>=1?1:camT);
 }
 const hooks=[];
+const cook={x:0.6};   /* where the cook in the aisle walks to: the last thing the player touched */
 new ResizeObserver(resize).observe(root);
 
 const clock=new THREE.Clock();
@@ -678,6 +676,7 @@ window.Kitchen={
   start(){root.hidden=false;visible=true;resize();setView(view,true);},
   setView(v){setView(v);},
   get view(){return view;},
+  get settled(){return camT>=1;},
   setOrder(o){order=o;updateHint();},
   FILL_OK,FILL_MAX,
   reset,wrap,
@@ -685,6 +684,6 @@ window.Kitchen={
   MEAT_NEED
 };
 updateHint();hint.hidden=true;
-export {THREE,scene,camera,renderer,root,hooks,gltf,texLoader,fitted,pbr,labelTex,canvasTex,mesh,M,PH};
+export {THREE,scene,camera,renderer,root,hooks,gltf,texLoader,fitted,pbr,labelTex,canvasTex,mesh,M,PH,cook};
 /* the hall module adds itself before the game is told the scene is ready */
 import('./hall.js').catch(err=>console.error('hall',err)).finally(()=>document.dispatchEvent(new Event('kitchenready')));

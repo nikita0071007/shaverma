@@ -137,7 +137,7 @@ button:focus-visible{outline:2px solid var(--turmeric);outline-offset:2px}
 .bub{position:absolute;left:0;top:0;pointer-events:auto;border:2px solid #2B1D14;background:#FFF6E0;border-radius:10px;padding:4px 7px 6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 3px 8px rgba(0,0,0,.3)}
 .bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:#2B1D14;border-bottom:0}
 .bub.sel{border-color:var(--turmeric);box-shadow:0 0 0 3px rgba(242,169,59,.45)}
-.bub.courier{background:#FFF1B8}
+.bub.courier{background:#FFE2C8}
 .bub .pt{display:block;height:4px;border-radius:2px;background:rgba(0,0,0,.2);overflow:hidden}
 .bub .pt i{display:block;height:100%}
 .bub .ic{display:flex;gap:5px;align-items:center}
@@ -213,8 +213,8 @@ var DRINK={tea:{name:'Чай',c:'#9A4A1C'},ayran:{name:'Айран',c:'#F3EFE4'}
 var DRINK_KEYS=['tea','ayran','cola'],DRINK_PRICE=60;
 /* Delivery couriers: one walks in every COURIER_EVERY seconds of play (the timer carries over between days),
    sets the open delivery bag down by the counter and waits for a take-away order. */
-var COURIER_BRAND='Яндекс Еда',COURIER_EVERY=300,COURIER_FIRST=60,COURIER_BONUS=100;
-var COURIER_SPOT={x:548,y:205};
+var COURIER_BRAND='Мчим Еда',COURIER_COLOR='#FF7A1A',COURIER_EVERY=300,COURIER_FIRST=60,COURIER_BONUS=100;
+var COURIER_SPOT={x:520,y:140};   /* by the glass counter's open end */
 var TABLES=[[150,150],[150,265],[290,150],[290,265],[430,150],[430,265]];
 var DOOR={x:662,y:348};
 var SKIN=['#F2C9A0','#E0AC83','#C58C63','#8D5A3B'];
@@ -356,7 +356,7 @@ function spawnCourier(){
     order:{meat:Math.random()<.5?'chicken':'beef',sauce:SAUCE_KEYS[Math.floor(Math.random()*3)],onion:Math.random()<.6,
       drink:Math.random()<.5?DRINK_KEYS[Math.floor(Math.random()*3)]:null},
     patience:mp,maxP:mp,eatT:0,pay:0,moving:true,bagOpen:0,
-    skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:'#FFCC00',hair:HAIR[Math.floor(Math.random()*HAIR.length)]
+    skin:SKIN[Math.floor(Math.random()*SKIN.length)],shirt:COURIER_COLOR,hair:HAIR[Math.floor(Math.random()*HAIR.length)]
   });
 }
 function moveAlong(c,dt){
@@ -459,7 +459,7 @@ function setView(v){
 /* the 3D scene (open kitchen + hall) takes over from the flat hall once it is ready */
 window.Game={
   get G(){return G;},
-  COURIER_BRAND:COURIER_BRAND,
+  COURIER_BRAND:COURIER_BRAND,COURIER_COLOR:COURIER_COLOR,
   select:function(c){if(G.phase!=='play'||c.state!=='wait')return;sfx('click');G.sel=c;updateTicket();setView('kitchen');}
 };
 document.getElementById('tabHall').onclick=function(){sfx('click');setView('hall');};
@@ -616,16 +616,16 @@ function drawBag(x,y,open){
   ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(x,y+2,17,5,0,0,Math.PI*2);ctx.fill();
   if(open>0){
     ctx.fillStyle='#2B2B2B';ctx.fillRect(x-w/2+2,y-h+1,w-4,5);
-    ctx.fillStyle='#E6B800';ctx.strokeStyle='#8A6D00';ctx.lineWidth=1;
+    ctx.fillStyle='#E0640C';ctx.strokeStyle='#8A3D00';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(x-w/2,y-h);ctx.lineTo(x+w/2,y-h);ctx.lineTo(x+w/2-2,y-h-14*open);ctx.lineTo(x-w/2+2,y-h-14*open);ctx.closePath();ctx.fill();ctx.stroke();
   }
-  ctx.fillStyle='#FFCC00';ctx.strokeStyle='#8A6D00';ctx.lineWidth=1.2;rr(ctx,x-w/2,y-h,w,h,3);ctx.fill();ctx.stroke();
+  ctx.fillStyle=COURIER_COLOR;ctx.strokeStyle='#8A3D00';ctx.lineWidth=1.2;rr(ctx,x-w/2,y-h,w,h,3);ctx.fill();ctx.stroke();
   ctx.fillStyle='#1A1A1A';ctx.font='700 6.5px Onest,Arial,sans-serif';ctx.textAlign='center';
   var parts=COURIER_BRAND.split(' ');ctx.fillText(parts[0],x,y-h+10);if(parts[1])ctx.fillText(parts[1],x,y-h+18);
 }
 function drawPerson(c){
   if(c.courier&&c.state!=='wait'&&c.state!=='eat'){   /* bag on the back while walking */
-    ctx.fillStyle='#FFCC00';ctx.strokeStyle='#8A6D00';ctx.lineWidth=1;rr(ctx,c.x-14,c.y-24,28,22,3);ctx.fill();ctx.stroke();
+    ctx.fillStyle=COURIER_COLOR;ctx.strokeStyle='#8A3D00';ctx.lineWidth=1;rr(ctx,c.x-14,c.y-24,28,22,3);ctx.fill();ctx.stroke();
   }
   var sit=(c.state==='wait'||c.state==='eat');
   var bob=c.moving?Math.sin(anim*12+c.table)*1.5:0;
@@ -635,7 +635,7 @@ function drawPerson(c){
   ctx.fillStyle=c.shirt;rr(ctx,x-10,y-14+bob,20,sit?20:26,6);ctx.fill();
   ctx.fillStyle=c.skin;ctx.beginPath();ctx.arc(x,y-22+bob,8.5,0,Math.PI*2);ctx.fill();
   ctx.fillStyle=c.hair;ctx.beginPath();ctx.arc(x,y-24+bob,9,Math.PI,Math.PI*2);ctx.fill();
-  if(c.courier){ctx.fillStyle='#FFCC00';ctx.beginPath();ctx.arc(x,y-25+bob,9.5,Math.PI,Math.PI*2);ctx.fill();ctx.fillRect(x,y-26+bob,12,3);}
+  if(c.courier){ctx.fillStyle=COURIER_COLOR;ctx.beginPath();ctx.arc(x,y-25+bob,9.5,Math.PI,Math.PI*2);ctx.fill();ctx.fillRect(x,y-26+bob,12,3);}
   ctx.fillStyle='#2B1D14';ctx.beginPath();ctx.arc(x-3,y-21+bob,1.2,0,Math.PI*2);ctx.arc(x+3,y-21+bob,1.2,0,Math.PI*2);ctx.fill();
   if(c.state==='wait'&&c.patience/c.maxP<.3){
     ctx.strokeStyle='#8A2A1A';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x-5,y-25+bob);ctx.lineTo(x-1,y-23.5+bob);ctx.moveTo(x+5,y-25+bob);ctx.lineTo(x+1,y-23.5+bob);ctx.stroke();

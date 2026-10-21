@@ -1,14 +1,16 @@
-/* 3D hall in front of the open kitchen: floor, walls, door, tables, guests, couriers, order bubbles.
+/* 3D hall in front of the open kitchen. Front to back: work counter (kitchen.js), the cook's aisle,
+   the glass serving counter, then the dining room with tables, guests and couriers.
    Game logic still runs on the flat 640x400 hall coordinates in index.html (window.Game);
    this module maps those positions onto the 3D floor every frame. */
-import {THREE,scene,camera,root,hooks,gltf,texLoader,fitted,pbr,mesh,M,PH} from './kitchen.js';
+import {THREE,scene,camera,root,hooks,gltf,texLoader,fitted,pbr,mesh,M,PH,cook} from './kitchen.js';
 
 const FLOOR_Y=-3;
 const SX=0.0326,SZ=0.045;
-const X=x=>(x-235)*SX,Z=y=>2.6+(y-100)*SZ;        /* flat hall -> 3D floor */
-const RIGHT_WALL=14.8,LEFT_WALL=-9.2,BACK=-3.38,FRONT=26;   /* deep and tall so the steep portrait camera never sees past the room */
+const X=x=>(x-235)*SX,Z=y=>7.1+(y-100)*SZ;        /* flat hall -> 3D floor, starting past the glass counter */
+const RIGHT_WALL=14.8,LEFT_WALL=-9.2,BACK=-3.38,FRONT=30;   /* deep and tall so the steep portrait camera never sees past the room */
 
 const hall=new THREE.Group();scene.add(hall);
+const crowd=new THREE.Group();hall.add(crowd);   /* tables and people: hidden while working in the kitchen view */
 
 /* ---------- room ---------- */
 const floorMat=new THREE.MeshStandardMaterial({color:'#d8d2c8',roughness:0.6});
@@ -47,7 +49,7 @@ let doorOpen=0;
 /* ---------- furniture ---------- */
 const TABLES=[[150,150],[150,265],[290,150],[290,265],[430,150],[430,265]];
 const tables=TABLES.map(([x,y])=>{
-  const g=new THREE.Group();g.position.set(X(x),FLOOR_Y,Z(y));g.visible=false;hall.add(g);
+  const g=new THREE.Group();g.position.set(X(x),FLOOR_Y,Z(y));g.visible=false;crowd.add(g);
   /* stand-in until the Poly Haven table loads */
   const top=mesh(new THREE.CylinderGeometry(1.2,1.2,0.12,32),M.wood);top.position.y=2.3;g.add(top);
   const leg=mesh(new THREE.CylinderGeometry(0.12,0.3,2.3,12),M.darkSteel);leg.position.y=1.15;g.add(leg);
@@ -69,7 +71,40 @@ loadPH('potted_plant_01',1.8,'potted_plant_01_lo').then(m=>{
   if(!m)return;
   for(const [x,z] of [[LEFT_WALL+1.2,FRONT-1.5],[RIGHT_WALL-1.3,2.2],[LEFT_WALL+1.2,3.2]]){const p=m.clone();p.position.set(x,FLOOR_Y,z);hall.add(p);}
 });
-loadPH('CashRegister_01',1.1).then(m=>{if(!m)return;m.position.set(6.4,0,0.1);m.rotation.y=-0.4;scene.add(m);});
+loadPH('CashRegister_01',1.1).then(m=>{if(!m)return;m.position.set(3.9,0.12,5.55);m.rotation.y=Math.PI;scene.add(m);});
+
+/* ---------- glass serving counter: guests look through it into the kitchen ---------- */
+{
+  const x0=-7.2,x1=5.0,z0=4.9,z1=6.3,w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  const body=mesh(new THREE.BoxGeometry(w,3,d),M.wood,false);body.position.set(cx,-1.5,cz);scene.add(body);
+  const kick=mesh(new THREE.BoxGeometry(w,0.25,d-0.2),M.darkSteel,false);kick.position.set(cx,-2.88,cz-0.1);scene.add(kick);
+  const top=mesh(new THREE.BoxGeometry(w+0.1,0.12,d+0.25),M.steel);top.position.set(cx,0.06,cz+0.1);scene.add(top);
+  const glass=new THREE.MeshPhysicalMaterial({color:'#e3f2f6',roughness:0.03,transparent:true,opacity:0.18,side:THREE.DoubleSide,depthWrite:false});
+  const H=1.3,front=new THREE.Mesh(new THREE.PlaneGeometry(w-1.6,Math.hypot(H,0.5)),glass);
+  front.position.set(cx-0.8,0.12+H/2,z1-0.25);front.rotation.x=-Math.atan2(0.5,H);scene.add(front);
+  const lid=new THREE.Mesh(new THREE.PlaneGeometry(w-1.6,d-0.7),glass);lid.rotation.x=-Math.PI/2;lid.position.set(cx-0.8,0.12+H,z0+(d-0.7)/2+0.1);scene.add(lid);
+  for(const x of [x0+0.05,x1-1.65]){const side=new THREE.Mesh(new THREE.PlaneGeometry(d-0.3,H),glass);side.rotation.y=Math.PI/2;side.position.set(x,0.12+H/2,cz);scene.add(side);}
+  const rail=mesh(new THREE.BoxGeometry(w-1.6,0.06,0.06),M.steel);rail.position.set(cx-0.8,0.12+H,z1-0.5);scene.add(rail);
+  /* trays of fresh food on display behind the glass */
+  const fills=['#d4321f','#3f7a2a','#c9a2d8','#e8d39a','#8a3b22','#f0e6c8'];
+  fills.forEach((c,i)=>{
+    const tx=x0+0.9+i*1.65;
+    const tray=mesh(new THREE.BoxGeometry(1.45,0.18,0.9),M.steel);tray.position.set(tx,0.21,cz-0.05);scene.add(tray);
+    const f=mesh(new THREE.BoxGeometry(1.3,0.1,0.75),new THREE.MeshStandardMaterial({color:c,roughness:0.55}));f.position.set(tx,0.29,cz-0.05);scene.add(f);
+  });
+}
+
+/* ---------- the cook is created after the people helpers below ---------- */
+let cookG=null;
+function makeCook(){
+  const g=makeGuest({skin:'#E0AC83',shirt:'#f4f4f2',hair:'#2B1D14'});
+  const white=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:0.6});
+  const hatBand=mesh(new THREE.CylinderGeometry(0.46,0.46,0.3,20),white);hatBand.position.y=4.75;g.userData.body.add(hatBand);
+  const puff=mesh(new THREE.SphereGeometry(0.58,18,12),white);puff.scale.y=0.7;puff.position.y=5.12;g.userData.body.add(puff);
+  const apron=mesh(new THREE.BoxGeometry(0.95,1.9,0.05),new THREE.MeshStandardMaterial({color:'#3a2a20',roughness:0.8}));apron.position.set(0,2.4,0.37);g.userData.body.add(apron);
+  g.position.set(0.6,FLOOR_Y,3.45);g.rotation.y=Math.PI;scene.add(g);
+  return g;
+}
 
 /* ---------- people ---------- */
 const PANTS=['#2d3142','#3b3b3b','#4a5a73','#5b4636','#2f4f4f'];
@@ -87,20 +122,23 @@ function makeGuest(c){
   g.userData={legL,legR,armL,armR,body,phase:Math.random()*6};
   return g;
 }
+cookG=makeCook();
+
 /* couriers use the Meshy model (white mesh, tinted courier-yellow) when it is available */
 let courierModel=null;
+const COURIER_C=(window.Game&&window.Game.COURIER_COLOR)||'#FF7A1A';
 gltf.load('assets/models/courier.glb',d=>{
   courierModel=fitted(d.scene,1);
   const box=new THREE.Box3().setFromObject(courierModel),h=box.max.y-box.min.y;
   courierModel.scale.setScalar(5.3/h);
-  courierModel.traverse(o=>{if(o.isMesh){o.geometry.computeVertexNormals();o.material=new THREE.MeshStandardMaterial({color:'#ffcf26',roughness:0.6,side:THREE.DoubleSide});}});
+  courierModel.traverse(o=>{if(o.isMesh){o.geometry.computeVertexNormals();o.material=new THREE.MeshStandardMaterial({color:COURIER_C,roughness:0.6,side:THREE.DoubleSide});}});
 });
 const bagTex=(()=>{const c=document.createElement('canvas');c.width=256;c.height=256;const g=c.getContext('2d');
-  g.fillStyle='#ffcc00';g.fillRect(0,0,256,256);g.fillStyle='#1a1a1a';g.font='800 50px Onest,Arial,sans-serif';g.textAlign='center';
-  const parts=(window.Game&&window.Game.COURIER_BRAND||'Яндекс Еда').split(' ');g.fillText(parts[0],128,118);if(parts[1])g.fillText(parts[1],128,176);
+  g.fillStyle=COURIER_C;g.fillRect(0,0,256,256);g.fillStyle='#ffffff';g.font='800 50px Onest,Arial,sans-serif';g.textAlign='center';
+  const parts=(window.Game&&window.Game.COURIER_BRAND||'Мчим Еда').split(' ');g.fillText(parts[0],128,118);if(parts[1])g.fillText(parts[1],128,176);
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;})();
 function makeBag(){
-  const g=new THREE.Group(),yellow=new THREE.MeshStandardMaterial({color:'#ffcc00',roughness:0.7});
+  const g=new THREE.Group(),yellow=new THREE.MeshStandardMaterial({color:COURIER_C,roughness:0.7});
   const sides=[yellow,yellow,yellow,new THREE.MeshStandardMaterial({color:'#222'}),new THREE.MeshStandardMaterial({map:bagTex,roughness:0.7}),yellow];
   const box=mesh(new THREE.BoxGeometry(1.4,1.4,1.4),sides);box.position.y=0.7;g.add(box);
   const lid=new THREE.Group();lid.position.set(0,1.4,-0.7);g.add(lid);
@@ -110,8 +148,8 @@ function makeBag(){
 function makeCourier(c){
   const g=new THREE.Group();
   if(courierModel){const m=courierModel.clone(true);g.add(m);g.userData.body=m;}
-  else{const s=makeGuest(Object.assign({},c,{shirt:'#ffcc00'}));g.add(s);Object.assign(g.userData,s.userData);}
-  const cap=mesh(new THREE.CylinderGeometry(0.5,0.5,0.25,16),new THREE.MeshStandardMaterial({color:'#ffcc00'}));
+  else{const s=makeGuest(Object.assign({},c,{shirt:COURIER_C}));g.add(s);Object.assign(g.userData,s.userData);}
+  const cap=mesh(new THREE.CylinderGeometry(0.5,0.5,0.25,16),new THREE.MeshStandardMaterial({color:COURIER_C}));
   if(!courierModel){cap.position.y=4.75;g.add(cap);}
   const bag=makeBag();bag.position.set(1.3,0,0.4);g.add(bag);g.userData.bag=bag;
   return g;
@@ -146,15 +184,27 @@ const plates=new Map();
 const wrapTex=texLoader.load('assets/textures/shawarma.png',t=>{t.colorSpace=THREE.SRGBColorSpace;});
 hooks.push((dt,t)=>{
   const Game=window.Game;if(!Game)return;
-  const G=Game.G,inHall=window.Kitchen&&window.Kitchen.view==='hall';
+  const G=Game.G,K=window.Kitchen,inHall=K&&K.view==='hall';
   layer.hidden=!inHall;
+  /* in the kitchen view the player is the cook: hide the cook and the dining room so nothing blocks the counter */
+  const working=K&&K.view==='kitchen'&&K.settled;
+  crowd.visible=!working;cookG.visible=!working;
+  {
+    const u=cookG.userData,dx=cook.x-cookG.position.x,step=Math.sign(dx)*Math.min(Math.abs(dx),dt*5);
+    cookG.position.x+=step;const walking=Math.abs(dx)>0.05;
+    u.phase=(u.phase||0)+dt*(walking?9:2.5);
+    const sw=walking?Math.sin(u.phase)*0.5:0;
+    u.legL.rotation.x=sw;u.legR.rotation.x=-sw;
+    u.armL.rotation.x=walking?-sw*0.8:-0.9+Math.sin(u.phase)*0.15;u.armR.rotation.x=walking?sw*0.8:-0.9-Math.sin(u.phase)*0.15;
+    cookG.rotation.y=walking?(dx>0?Math.PI/2:-Math.PI/2):Math.PI;
+  }
   tables.forEach((tb,i)=>{tb.visible=i<G.tables;});
   const seen=new Set();
   let nearDoor=false;
   for(const c of G.cust){
     seen.add(c);
     let a=actors.get(c);
-    if(!a){a={g:c.courier?makeCourier(c):makeGuest(c),last:new THREE.Vector3(X(c.x),FLOOR_Y,Z(c.y)),bub:null};a.g.position.copy(a.last);hall.add(a.g);actors.set(c,a);}
+    if(!a){a={g:c.courier?makeCourier(c):makeGuest(c),last:new THREE.Vector3(X(c.x),FLOOR_Y,Z(c.y)),bub:null};a.g.position.copy(a.last);crowd.add(a.g);actors.set(c,a);}
     const g=a.g,u=g.userData;
     const seated=!c.courier&&(c.state==='wait'||c.state==='eat');
     let px=X(c.x),pz=Z(c.y);
@@ -184,9 +234,9 @@ hooks.push((dt,t)=>{
     if(c.state==='eat'&&!c.courier){
       if(!plates.has(c)){
         const s=new THREE.Sprite(new THREE.SpriteMaterial({map:wrapTex,transparent:true}));
-        const tb=tables[c.table];s.position.set(tb.position.x-0.5,FLOOR_Y+3.15,tb.position.z);s.scale.set(0.38,1.0,1);hall.add(s);plates.set(c,s);
+        const tb=tables[c.table];s.position.set(tb.position.x-0.5,FLOOR_Y+3.15,tb.position.z);s.scale.set(0.38,1.0,1);crowd.add(s);plates.set(c,s);
       }
-    }else if(plates.has(c)){hall.remove(plates.get(c));plates.delete(c);}
+    }else if(plates.has(c)){crowd.remove(plates.get(c));plates.delete(c);}
     /* order bubble */
     if(c.state==='wait'){
       if(!a.bub)a.bub=bubbleFor(c);
@@ -198,7 +248,7 @@ hooks.push((dt,t)=>{
       const bar=a.bub.firstChild.firstChild;bar.style.width=(r*100)+'%';bar.style.background=r>.5?'#8FB339':r>.25?'#F2A93B':'#D8432B';
     }else if(a.bub){a.bub.remove();a.bub=null;}
   }
-  for(const [c,a] of actors)if(!seen.has(c)){hall.remove(a.g);if(a.bub)a.bub.remove();actors.delete(c);if(plates.has(c)){hall.remove(plates.get(c));plates.delete(c);}}
+  for(const [c,a] of actors)if(!seen.has(c)){crowd.remove(a.g);if(a.bub)a.bub.remove();actors.delete(c);if(plates.has(c)){crowd.remove(plates.get(c));plates.delete(c);}}
   /* door */
   doorOpen=THREE.MathUtils.clamp(doorOpen+(nearDoor?dt:-dt)*3,0,1);
   doorPivot.rotation.y=doorOpen*1.3;
